@@ -1,6 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const L = SurroundLogic, ids = L.IDS;
+const formatDistance = (meters, digits = 2) => L.metersToFeet(meters).toFixed(digits) + ' ft';
 const title = id => id === 'boom' ? 'Boom arm' : id.charAt(0).toUpperCase() + id.slice(1);
 const demoDistances = [3.2, 1.4, 2.8, 4.1];
 let stored = {};
@@ -23,12 +24,14 @@ function log(message, level = 'clear') {
   while ($('log').children.length > 35) $('log').lastChild.remove();
 }
 function buildSensors() {
-  $('sensorList').innerHTML = ids.map(id => `<div class="sensor" id="sensor-${id}"><div class="sensor-head"><span class="sensor-name">${title(id)} sensor</span><span class="reading" id="reading-${id}">—</span></div><div class="sensor-status" id="status-${id}"></div><label class="range-label" for="maxRange-${id}">Max range <output id="maxRangeValue-${id}"></output></label><input type="range" id="maxRange-${id}" min="0.3" max="10" step="0.1" value="${sensors[id].maxRange}"><label class="range-label" for="fullTone-${id}">Full tone at <output id="fullToneValue-${id}"></output></label><input class="critical-range" type="range" id="fullTone-${id}" min="0.1" max="9.9" step="0.1" value="${sensors[id].fullTone}"><div class="urgency-track"><span id="urgency-${id}"></span></div></div>`).join('');
+  $('sensorList').innerHTML = ids.map(id => `<div class="sensor" id="sensor-${id}"><div class="sensor-head"><span class="sensor-name">${title(id)} sensor</span><span class="reading" id="reading-${id}">—</span></div><div class="sensor-status" id="status-${id}"></div><label class="range-label" for="maxRange-${id}">Max range <output id="maxRangeValue-${id}"></output></label><input type="range" id="maxRange-${id}" min="1" max="15" step="0.1" value="${L.metersToFeet(sensors[id].maxRange).toFixed(1)}"><label class="range-label" for="fullTone-${id}">Full tone at <output id="fullToneValue-${id}"></output></label><input class="critical-range" type="range" id="fullTone-${id}" min="0.1" max="14.9" step="0.1" value="${L.metersToFeet(sensors[id].fullTone).toFixed(1)}"><div class="urgency-track"><span id="urgency-${id}"></span></div></div>`).join('');
   ids.forEach(id => ['maxRange', 'fullTone'].forEach(key => $(`${key}-${id}`).addEventListener('input', e => {
-    const s = sensors[id]; s[key] = Number(e.target.value);
-    if (key === 'maxRange') s.fullTone = Math.min(s.fullTone, Math.round((s.maxRange - 0.1) * 10) / 10);
-    else s.maxRange = Math.max(s.maxRange, Math.round((s.fullTone + 0.1) * 10) / 10);
-    ['maxRange', 'fullTone'].forEach(k => $(`${k}-${id}`).value = s[k]);
+    const s = sensors[id];
+    let maxFeet = Number($('maxRange-' + id).value), toneFeet = Number($('fullTone-' + id).value);
+    if (key === 'maxRange') toneFeet = Math.min(toneFeet, Math.round((maxFeet - 0.1) * 10) / 10);
+    else maxFeet = Math.max(maxFeet, Math.round((toneFeet + 0.1) * 10) / 10);
+    s.maxRange = L.feetToMeters(maxFeet); s.fullTone = L.feetToMeters(toneFeet);
+    ['maxRange', 'fullTone'].forEach(k => $(`${k}-${id}`).value = L.metersToFeet(s[k]).toFixed(1));
     save(); renderSensors();
   })));
   $('mapReadouts').innerHTML = ids.map(id => `<div id="map-${id}" class="map-readout"><span>${title(id)}</span><strong>—</strong></div>`).join('');
@@ -46,12 +49,12 @@ function renderSensors() {
       log(`${title(id)}: ${{ stale: 'no fresh sensor data', clear: 'outside alert range', approaching: 'distance-scaled beeps', close: 'full tone' }[next]}${mode === 'demo' ? ' (demo)' : ''}.`, next); s.status = next;
     }
     $(`sensor-${id}`).className = 'sensor ' + next;
-    $(`reading-${id}`).innerHTML = next === 'stale' ? '— <small>m</small>' : `${s.distance.toFixed(2)} <small>m</small>`;
+    $(`reading-${id}`).innerHTML = next === 'stale' ? '— <small>ft</small>' : `${L.metersToFeet(s.distance).toFixed(2)} <small>ft</small>`;
     $(`status-${id}`).textContent = (mode === 'demo' ? 'SIMULATED · ' : 'LIVE · ') + ({ clear: 'OUTSIDE ALERT RANGE', approaching: 'INTENSITY ' + Math.round(profile.progress * 100) + '%', close: 'FULL TONE', stale: 'NO FRESH DATA' }[next]);
-    ['maxRange', 'fullTone'].forEach(key => $(`${key}Value-${id}`).textContent = s[key].toFixed(1) + ' m');
+    ['maxRange', 'fullTone'].forEach(key => $(`${key}Value-${id}`).textContent = formatDistance(s[key], 1));
     $(`urgency-${id}`).style.width = (profile.progress * 100) + '%';
     $(`map-${id}`).className = 'map-readout ' + next;
-    $(`map-${id}`).querySelector('strong').textContent = next === 'stale' ? 'No data' : s.distance.toFixed(2) + ' m';
+    $(`map-${id}`).querySelector('strong').textContent = next === 'stale' ? 'No data' : formatDistance(s.distance);
     if (profile.active && (!winner || profile.progress > winner.progress)) winner = { ...profile, sensor: id };
   });
   audio.setProfile(soundOn ? winner : null);
@@ -76,7 +79,7 @@ function renderMap(now) {
     });
   });
   $('mapRays').innerHTML = rays.join(''); $('mapSensors').innerHTML = mounts.join('');
-  $('mapPoints').innerHTML = fused.points.map(p => `<circle data-sources="${p.sources.join(',')}" cx="${p.x_m}" cy="${-p.y_m}" r="${p.sources.length > 1 ? '.15' : '.11'}" fill="hsl(${95 - p.urgency * 85} 70% 68%)" stroke="#17221a" stroke-width=".035"><title>${p.sources.map(title).join(' + ')} · ${p.x_m.toFixed(2)}, ${p.y_m.toFixed(2)} m · ${p.count} returns</title></circle>`).join('');
+  $('mapPoints').innerHTML = fused.points.map(p => `<circle data-sources="${p.sources.join(',')}" cx="${p.x_m}" cy="${-p.y_m}" r="${p.sources.length > 1 ? '.15' : '.11'}" fill="hsl(${95 - p.urgency * 85} 70% 68%)" stroke="#17221a" stroke-width=".035"><title>${p.sources.map(title).join(' + ')} · ${L.metersToFeet(p.x_m).toFixed(2)}, ${L.metersToFeet(p.y_m).toFixed(2)} ft · ${p.count} returns</title></circle>`).join('');
   $('mapBadge').textContent = mode === 'demo' ? 'DEMO GEOMETRY' : fused.unplaced.length ? 'NEEDS SENSOR POSES' : 'LIVE COORDINATES';
   $('mapSummary').textContent = `${fused.freshSensors}/4 fresh sensors · ${fused.points.length} combined points${fused.unplaced.length ? ' · Unplaced: ' + fused.unplaced.map(title).join(', ') : ''}${mode === 'demo' ? ' · demo mounts and distances' : ''}`;
 }
@@ -128,11 +131,11 @@ function drawDemos() {
       c.strokeStyle = '#d0dda4'; c.lineWidth = 2; c.strokeRect(left - 5, top - 5, width + 10, height + 10);
       const labelY = Math.max(85, Math.min(345, top - 20));
       c.font = '600 16px Segoe UI'; c.textAlign = 'center';
-      const label = 'SIMULATED · ' + distance.toFixed(2) + ' m';
+      const label = 'SIMULATED · ' + formatDistance(distance);
       const labelWidth = c.measureText(label).width;
       c.fillStyle = '#101b16eb'; c.fillRect(van.x - labelWidth / 2 - 10, labelY - 18, labelWidth + 20, 26);
       c.fillStyle = '#dfebc7'; c.fillText(label, van.x, labelY);
-      canvas.setAttribute('aria-label', title(id) + ' simulated view: obstacle ' + distance.toFixed(2) + ' meters away');
+      canvas.setAttribute('aria-label', title(id) + ' simulated view: obstacle ' + L.metersToFeet(distance).toFixed(2) + ' feet away');
     } else {
       canvas.setAttribute('aria-label', title(id) + ' camera placeholder. No simulated obstacle in live sensor mode.');
     }
@@ -197,9 +200,9 @@ $('testSound').onclick = () => audio.test().catch(error => log(error.message, 'a
 $('volume').oninput = e => { audio.volume = Number(e.target.value) / 100; $('volumeValue').textContent = e.target.value + '%'; };
 $('single').onclick = () => { layout = 1; save(); renderCameras(); }; $('multi').onclick = () => { layout = 4; save(); renderCameras(); };
 $('settingsButton').onclick = () => $('devices').showModal(); $('clearLog').onclick = () => $('log').replaceChildren();
-function syncDemoControl() { const value = sensors[$('demoSensor').value].distance; $('obstacle').value = value; $('obstacleValue').textContent = value.toFixed(2) + ' m'; }
+function syncDemoControl() { const value = sensors[$('demoSensor').value].distance; $('obstacle').value = L.metersToFeet(value); $('obstacleValue').textContent = formatDistance(value); }
 $('demoSensor').onchange = syncDemoControl;
-$('obstacle').oninput = e => { if (mode !== 'demo') return; sensors[$('demoSensor').value].distance = Number(e.target.value); syncDemoControl(); renderSensors(); };
+$('obstacle').oninput = e => { if (mode !== 'demo') return; sensors[$('demoSensor').value].distance = L.feetToMeters(Number(e.target.value)); syncDemoControl(); renderSensors(); };
 function resetDemo() {
   ids.forEach((id, i) => Object.assign(sensors[id], { distance: demoDistances[i], updated: Date.now(), pose: L.DEMO_POSES[id], points: demoPoints(demoDistances[i]) })); syncDemoControl(); renderSensors();
 }
@@ -244,4 +247,4 @@ $('disconnectSensors').onclick = () => {
 };
 window.addEventListener('beforeunload', () => { ids.forEach(id => cameras[id].stream?.getTracks().forEach(t => t.stop())); socket?.close(); audio.close(); });
 window.addEventListener('resize', drawDemos);
-buildSensors(); buildSetup(); renderCameras(); renderSensors(); log('Telehandler demo ready. Try each side and adjust the sound curve.'); setInterval(renderSensors, 100);
+buildSensors(); buildSetup(); renderCameras(); syncDemoControl(); renderSensors(); log('Telehandler demo ready. Try each side and adjust the sound curve.'); setInterval(renderSensors, 100);

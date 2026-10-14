@@ -2,6 +2,9 @@
   'use strict';
   const IDS = ['boom', 'rear', 'left', 'right'];
   const STALE_MS = 3000;
+  const METERS_PER_FOOT = 0.3048, MAX_RANGE_FT = 15;
+  const feetToMeters = feet => feet * METERS_PER_FOOT;
+  const metersToFeet = meters => meters / METERS_PER_FOOT;
   const AUDIO_MIN_HZ = 240, AUDIO_MAX_HZ = 480;
   const DEMO_OBSTACLE = { width_m: 0.8, height_m: 1.2, camera_height_m: 0.9 };
   function demoScan(distance) {
@@ -19,8 +22,8 @@
     right: { x_m: 1.2, y_m: 0, yaw_deg: 90 }
   };
   function normalizeSettings(input = {}) {
-    const maxRange = finite(input.maxRange) ? clamp(input.maxRange, 0.3, 10) : 3;
-    const fullTone = finite(input.fullTone) ? clamp(input.fullTone, 0.1, maxRange - 0.1) : Math.min(0.5, maxRange - 0.1);
+    const maxRange = finite(input.maxRange) ? clamp(input.maxRange, feetToMeters(1), feetToMeters(MAX_RANGE_FT)) : feetToMeters(10);
+    const fullTone = finite(input.fullTone) ? clamp(input.fullTone, feetToMeters(0.1), maxRange - feetToMeters(0.1)) : Math.min(feetToMeters(2), maxRange - feetToMeters(0.1));
     return { maxRange, fullTone };
   }
   function alertProfile(distance, settings) {
@@ -97,7 +100,7 @@
     }
     return { points: [...cells.values()].map(c => ({ x_m: c.x_m / c.count, y_m: c.y_m / c.count, count: c.count, sources: [...c.sources], urgency: c.urgency })), unplaced, freshSensors };
   }
-  const api = { IDS, STALE_MS, AUDIO_MIN_HZ, AUDIO_MAX_HZ, DEMO_OBSTACLE, demoScan, DEMO_POSES, normalizeSettings, alertProfile, parseMeasurement, parseFrame, projectPoint, fuseReadings };
+  const api = { IDS, STALE_MS, METERS_PER_FOOT, MAX_RANGE_FT, feetToMeters, metersToFeet, AUDIO_MIN_HZ, AUDIO_MAX_HZ, DEMO_OBSTACLE, demoScan, DEMO_POSES, normalizeSettings, alertProfile, parseMeasurement, parseFrame, projectPoint, fuseReadings };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.SurroundLogic = api;
 })(globalThis);

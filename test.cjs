@@ -18,9 +18,9 @@ test('sound increases continuously with decreasing distance and ends in sustaine
   assert.equal(L.alertProfile(-1, settings).state, 'stale');
 });
 test('range settings cannot invert or create a zero width scale', () => {
-  assert.deepEqual(L.normalizeSettings({ maxRange: 1, fullTone: 5 }), { maxRange: 1, fullTone: 0.9 });
-  assert.equal(L.normalizeSettings({ maxRange: 100 }).maxRange, 10);
-  assert.equal(L.normalizeSettings({ maxRange: 0 }).maxRange, 0.3);
+  assert.deepEqual(L.normalizeSettings({ maxRange: 1, fullTone: 5 }), { maxRange: 1, fullTone: 1 - L.feetToMeters(0.1) });
+  assert.equal(L.normalizeSettings({ maxRange: 100 }).maxRange, L.feetToMeters(15));
+  assert.equal(L.normalizeSettings({ maxRange: 0 }).maxRange, L.feetToMeters(1));
 });
 test('invalid messages and obsolete front ID are rejected', () => {
   for (const input of ['bad', 'null', '{}', '{"sensor":"front","distance_m":1}', '{"sensor":"rear","distance_m":"1"}', '{"sensor":"rear","distance_m":-1}', '{"sensor":"rear","distance_m":101}', '{"sensor":"boom","points":[]}', '{"sensor":"boom","points":[{"distance_m":1,"bearing_deg":181}]}', '{"sensor":"boom","distance_m":1,"pose":{"x_m":0,"y_m":0,"yaw_deg":"0"}}']) assert.equal(L.parseFrame(input), null);
@@ -64,4 +64,13 @@ test('demo scan preserves a fixed object width at every simulated distance', () 
     assert.ok(face.every(point => Math.abs(point.y_m - distance) < 1e-9));
     assert.ok(Math.abs(face[2].x_m - face[0].x_m - 0.8) < 1e-9);
   }
+});
+
+test('15 foot limit uses actual unit conversion rather than relabeling meters', () => {
+  assert.equal(L.feetToMeters(15), 4.572);
+  assert.equal(L.metersToFeet(0.3048), 1);
+  assert.equal(L.normalizeSettings({ maxRange: 10, fullTone: 5 }).maxRange, 4.572);
+  const nearLimit = L.normalizeSettings({ maxRange: 10, fullTone: 5 });
+  assert.ok(L.metersToFeet(nearLimit.fullTone) <= 14.9 + 1e-9);
+  assert.equal(L.alertProfile(4.573, nearLimit).active, false);
 });

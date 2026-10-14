@@ -14,6 +14,8 @@ Open http://localhost:4317. No application dependencies are needed to run the da
 
 ## Distance-scaled audio
 
+All distance controls and displayed readings use feet, with a **15 ft maximum** for alert ranges and demo obstacles. Existing saved meter settings are converted for display and capped at 15 ft. The sensor protocol and geometry calculations continue to use meters internally.
+
 Each sensor has two sliders:
 
 - **Max range:** the distance at which slow, low-pitched beeps begin.

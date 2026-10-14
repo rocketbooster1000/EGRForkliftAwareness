@@ -22,6 +22,13 @@ async function waitForServer() {
   let bridge;
   await page.routeWebSocket(/.*/, ws => { bridge = ws; });
   await page.goto(base);
+  assert.equal(await page.locator('#maxRange-boom').getAttribute('max'), '15');
+  assert.equal(await page.locator('#obstacle').getAttribute('max'), '15');
+  await page.evaluate(() => localStorage.setItem('surround-settings-v2', JSON.stringify({ boom: { maxRange: 10, fullTone: 1 } })));
+  await page.reload();
+  assert.equal(await page.locator('#maxRange-boom').inputValue(), '15');
+  assert.equal(await page.evaluate(() => sensors.boom.maxRange), 4.572);
+  await page.locator('#maxRange-boom').fill('10'); await page.locator('#fullTone-boom').fill('2');
   assert.equal(await page.title(), 'Telehandler · Surround');
   assert.equal(await page.locator('#camera-front').count(), 0);
   assert.equal(await page.locator('#sensorList input[type=range]').count(), 8);
@@ -30,7 +37,7 @@ async function waitForServer() {
   // Verify rendered camera size, displayed distance, and metric map agree on every side.
   for (const id of ['boom', 'rear', 'left', 'right']) {
     await page.locator('#demoSensor').selectOption(id);
-    await page.locator('#obstacle').fill('5');
+    await page.locator('#obstacle').fill('15');
     const renderedWidth = () => page.evaluate(sensor => {
       const canvas = document.querySelector('#camera-' + sensor + ' canvas');
       const pixels = canvas.getContext('2d').getImageData(0, 185, canvas.width, 1).data;
@@ -39,15 +46,15 @@ async function waitForServer() {
       return count;
     }, id);
     const farWidth = await renderedWidth();
-    await page.locator('#obstacle').fill('0.7');
+    await page.locator('#obstacle').fill('2');
     assert.ok(await renderedWidth() > farWidth * 4);
-    assert.ok((await page.locator('#camera-' + id + ' canvas').getAttribute('aria-label')).includes('0.70 meters'));
-    assert.equal(await page.locator('#map-' + id + ' strong').innerText(), '0.70 m');
+    assert.ok((await page.locator('#camera-' + id + ' canvas').getAttribute('aria-label')).includes('2.00 feet'));
+    assert.equal(await page.locator('#map-' + id + ' strong').innerText(), '2.00 ft');
     const nearestMapReturn = await page.evaluate(sensor => {
       const pose = L.DEMO_POSES[sensor];
       return Math.min(...[...document.querySelectorAll('#mapPoints circle')].filter(p => p.dataset.sources.split(',').includes(sensor)).map(p => Math.hypot(Number(p.getAttribute('cx')) - pose.x_m, -Number(p.getAttribute('cy')) - pose.y_m)));
     }, id);
-    assert.ok(Math.abs(nearestMapReturn - 0.7) < 0.001);
+    assert.ok(Math.abs(nearestMapReturn - 0.6096) < 0.001);
   }
   for (const id of ['boom', 'rear', 'left', 'right']) { await page.locator('#demoSensor').selectOption(id); await page.locator('#obstacle').fill('9'); }
   await page.locator('#demoSensor').selectOption('rear');
@@ -82,7 +89,7 @@ async function waitForServer() {
   assert.ok(renderedAudio.active > 0.01); assert.ok(renderedAudio.muted < 0.00001);
   await page.locator('#maxRange-rear').fill('4'); await page.locator('#fullTone-rear').fill('1');
   await page.reload(); assert.equal(await page.locator('#maxRange-rear').inputValue(), '4'); assert.equal(await page.locator('#fullTone-rear').inputValue(), '1');
-  await page.locator('#maxRange-rear').fill('0.3'); assert.ok(Number(await page.locator('#fullTone-rear').inputValue()) < 0.3);
+  await page.locator('#maxRange-rear').fill('1'); assert.ok(Number(await page.locator('#fullTone-rear').inputValue()) < 1);
   await page.locator('#fullTone-rear').fill('2'); assert.ok(Number(await page.locator('#maxRange-rear').inputValue()) > 2);
   await page.locator('#settingsButton').click();
   await page.locator('#connect-boom').click(); await page.waitForFunction(() => document.getElementById('cameraCount').textContent === '1 connected');
@@ -99,6 +106,7 @@ async function waitForServer() {
   ] });
   await page.waitForFunction(() => document.querySelector('[data-sources="boom,right"]'));
   assert.equal(await page.locator('#mapPoints circle').count(), 2);
+  assert.equal(await page.locator('#map-boom strong').innerText(), '3.28 ft');
   assert.ok((await page.locator('#mapSummary').innerText()).includes('Unplaced: Left'));
   assert.equal(await page.locator('#obstacle').isDisabled(), true);
   send({ sensor: 'boom', distance_m: 1, pose: { x_m: 0.03, y_m: 4, yaw_deg: 0 } });
@@ -111,7 +119,7 @@ async function waitForServer() {
   await page.waitForFunction(() => document.getElementById('sensor-boom').classList.contains('close'));
   bridge.close(); await page.waitForFunction(() => document.getElementById('sensor-boom').classList.contains('stale'));
   await page.locator('#disconnectSensors').click(); await page.getByRole('button', { name: 'Close device setup' }).click();
-  await page.locator('#maxRange-rear').fill('3'); await page.locator('#fullTone-rear').fill('0.5');
+  await page.locator('#maxRange-rear').fill('10'); await page.locator('#fullTone-rear').fill('2');
   const results = path.join(__dirname, 'test-results'); await fs.mkdir(results, { recursive: true });
   await page.screenshot({ path: path.join(results, 'dashboard-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
