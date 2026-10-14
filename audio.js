@@ -41,7 +41,7 @@ class ProximityAudio {
   async test() {
     await this.start();
     const oscillator = this.context.createOscillator(), gain = this.context.createGain(), t = this.context.currentTime;
-    oscillator.frequency.setValueAtTime(420, t); oscillator.frequency.exponentialRampToValueAtTime(2000, t + 0.7);
+    oscillator.frequency.setValueAtTime(SurroundLogic.AUDIO_MIN_HZ, t); oscillator.frequency.exponentialRampToValueAtTime(SurroundLogic.AUDIO_MAX_HZ, t + 0.7);
     gain.gain.setValueAtTime(0, t); gain.gain.linearRampToValueAtTime(this.volume * 0.18, t + 0.02); gain.gain.setValueAtTime(this.volume * 0.18, t + 0.65); gain.gain.linearRampToValueAtTime(0, t + 0.72);
     oscillator.connect(gain); gain.connect(this.context.destination); oscillator.start(t); oscillator.stop(t + 0.75);
   }

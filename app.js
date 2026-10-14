@@ -33,7 +33,7 @@ function buildSensors() {
   })));
   $('mapReadouts').innerHTML = ids.map(id => `<div id="map-${id}" class="map-readout"><span>${title(id)}</span><strong>—</strong></div>`).join('');
 }
-function demoPoints(distance) { return [-12, 0, 12].map((bearing, i) => ({ bearing_deg: bearing, distance_m: distance + (i === 1 ? 0 : 0.16) })); }
+function demoPoints(distance) { return L.demoScan(distance); }
 function renderSensors() {
   const now = Date.now();
   let winner = null;
@@ -57,6 +57,7 @@ function renderSensors() {
   audio.setProfile(soundOn ? winner : null);
   $('audioSummary').textContent = winner ? `${title(winner.sensor)} · ${Math.round(winner.frequencyHz)} Hz · ${winner.continuous ? 'sustained tone' : (1 / winner.periodSeconds).toFixed(1) + ' beeps / sec'}${soundOn ? '' : ' · muted'}` : 'No fresh readings inside an alert range.';
   renderMap(now);
+  drawDemos();
 }
 function renderMap(now) {
   const fused = L.fuseReadings(sensors, now);
@@ -92,24 +93,52 @@ function renderCameras(){
  grid.classList.toggle('single',layout===1);$('single').classList.toggle('selected',layout===1);$('multi').classList.toggle('selected',layout===4);
  requestAnimationFrame(drawDemos);
 }
-function drawDemos(){
- ids.forEach((id,index)=>{
- const card=$('camera-'+id),canvas=card.querySelector('canvas');if(!canvas||card.hidden)return;
- const w=canvas.width=800,h=canvas.height=470,c=canvas.getContext('2d');
- c.fillStyle='#202c2b';c.fillRect(0,0,w,h);const grad=c.createLinearGradient(0,0,0,h);grad.addColorStop(0,'#344641');grad.addColorStop(1,'#152522');c.fillStyle=grad;c.fillRect(0,0,w,h);
- const van={x:400+index*10,y:185};
- c.strokeStyle='#7b928528';c.lineWidth=1;
- for(let x=-900;x<1800;x+=100){c.beginPath();c.moveTo(van.x,van.y);c.lineTo(x,h);c.stroke();}
- for(let y=195;y<h;y+=Math.max(14,(y-150)*.22)){c.beginPath();c.moveTo(0,y);c.lineTo(w,y);c.stroke();}
- // Stylized warehouse shelving, intentionally distinct from camera footage.
- for(const side of [0,1]){c.fillStyle=side?'#293c36':'#304038';c.beginPath();c.moveTo(side?800:0,0);c.lineTo(side?530:270,130);c.lineTo(side?530:270,280);c.lineTo(side?800:0,470);c.fill();
-  c.strokeStyle='#6f8d713b';c.lineWidth=4;for(let i=0;i<4;i++){let x=side?800-i*85:i*85;c.beginPath();c.moveTo(x,0);c.lineTo(x,h-i*52);c.stroke();}
-  for(let j=0;j<3;j++){c.beginPath();c.moveTo(side?800:0,85+j*105);c.lineTo(side?530:270,145+j*49);c.stroke();}
- }
- c.strokeStyle='#d3df9d66';c.lineWidth=3;c.beginPath();c.moveTo(195,h);c.lineTo(350,225);c.moveTo(605,h);c.lineTo(450,225);c.stroke();
- if(index===1){c.fillStyle='#7f8c6d';c.fillRect(363,250,76,93);c.strokeStyle='#c3d0a1';c.lineWidth=2;c.strokeRect(355,241,92,110);c.fillStyle='#d3dfb9';c.font='12px Segoe UI';c.fillText('SIMULATED OBSTACLE',338,231);}
- c.fillStyle='#d4e2d166';c.font='12px Segoe UI';c.textAlign='center';c.fillText('ILLUSTRATED CAMERA PLACEHOLDER',400,402);c.textAlign='left';
- });
+function drawDemos() {
+  ids.forEach((id, index) => {
+    const card = $('camera-' + id), canvas = card.querySelector('canvas');
+    if (!canvas || card.hidden) return;
+    const simulated = mode === 'demo', distance = sensors[id].distance;
+    const key = simulated + ':' + distance;
+    if (canvas.dataset.renderKey === key) return;
+    canvas.dataset.renderKey = key;
+    const w = canvas.width = 800, h = canvas.height = 470, c = canvas.getContext('2d');
+    const van = { x: 400, y: 185 };
+    const grad = c.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, '#344641'); grad.addColorStop(1, '#152522');
+    c.fillStyle = grad; c.fillRect(0, 0, w, h);
+    c.strokeStyle = '#7b928528'; c.lineWidth = 1;
+    for (let x = -900; x < 1800; x += 100) { c.beginPath(); c.moveTo(van.x, van.y); c.lineTo(x, h); c.stroke(); }
+    for (let y = 195; y < h; y += Math.max(14, (y - 150) * 0.22)) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+    for (const side of [0, 1]) {
+      c.fillStyle = side ? '#293c36' : '#304038'; c.beginPath(); c.moveTo(side ? 800 : 0, 0); c.lineTo(side ? 530 : 270, 130); c.lineTo(side ? 530 : 270, 280); c.lineTo(side ? 800 : 0, 470); c.fill();
+      c.strokeStyle = '#6f8d713b'; c.lineWidth = 4;
+      for (let i = 0; i < 4; i++) { const x = side ? 800 - i * 85 : i * 85; c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h - i * 52); c.stroke(); }
+      for (let j = 0; j < 3; j++) { c.beginPath(); c.moveTo(side ? 800 : 0, 85 + j * 105); c.lineTo(side ? 530 : 270, 145 + j * 49); c.stroke(); }
+    }
+    c.strokeStyle = '#d3df9d66'; c.lineWidth = 3; c.beginPath(); c.moveTo(195, h); c.lineTo(350, 225); c.moveTo(605, h); c.lineTo(450, 225); c.stroke();
+    if (simulated) {
+      // One fixed-size obstacle, projected using the same metric distance/width as the map scan.
+      const depth = Math.max(0.05, distance), focal = 335;
+      const width = focal * L.DEMO_OBSTACLE.width_m / depth;
+      const height = focal * L.DEMO_OBSTACLE.height_m / depth;
+      const bottom = van.y + focal * L.DEMO_OBSTACLE.camera_height_m / depth;
+      const left = van.x - width / 2, top = bottom - height;
+      c.fillStyle = '#7f8c6d'; c.fillRect(left, top, width, height);
+      c.fillStyle = '#9aa886'; c.fillRect(left, top, Math.min(6, width * 0.07), height);
+      c.strokeStyle = '#d0dda4'; c.lineWidth = 2; c.strokeRect(left - 5, top - 5, width + 10, height + 10);
+      const labelY = Math.max(85, Math.min(345, top - 20));
+      c.font = '600 16px Segoe UI'; c.textAlign = 'center';
+      const label = 'SIMULATED · ' + distance.toFixed(2) + ' m';
+      const labelWidth = c.measureText(label).width;
+      c.fillStyle = '#101b16eb'; c.fillRect(van.x - labelWidth / 2 - 10, labelY - 18, labelWidth + 20, 26);
+      c.fillStyle = '#dfebc7'; c.fillText(label, van.x, labelY);
+      canvas.setAttribute('aria-label', title(id) + ' simulated view: obstacle ' + distance.toFixed(2) + ' meters away');
+    } else {
+      canvas.setAttribute('aria-label', title(id) + ' camera placeholder. No simulated obstacle in live sensor mode.');
+    }
+    c.fillStyle = '#d4e2d166'; c.font = '12px Segoe UI'; c.textAlign = 'center';
+    c.fillText('ILLUSTRATED CAMERA PLACEHOLDER', 400, 402);
+  });
 }
 
 function updateCameraCount(){$('cameraCount').textContent=ids.filter(id=>cameras[id].kind==='live').length+' connected';}

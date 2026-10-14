@@ -27,6 +27,28 @@ async function waitForServer() {
   assert.equal(await page.locator('#sensorList input[type=range]').count(), 8);
   await page.locator('#single').click(); assert.equal(await page.locator('.camera:visible').count(), 1); assert.equal(await page.locator('#camera-boom').isVisible(), true);
   await page.locator('#multi').click(); assert.equal(await page.locator('.camera:visible').count(), 4);
+  // Verify rendered camera size, displayed distance, and metric map agree on every side.
+  for (const id of ['boom', 'rear', 'left', 'right']) {
+    await page.locator('#demoSensor').selectOption(id);
+    await page.locator('#obstacle').fill('5');
+    const renderedWidth = () => page.evaluate(sensor => {
+      const canvas = document.querySelector('#camera-' + sensor + ' canvas');
+      const pixels = canvas.getContext('2d').getImageData(0, 185, canvas.width, 1).data;
+      let count = 0;
+      for (let i = 0; i < pixels.length; i += 4) if (pixels[i] === 127 && pixels[i + 1] === 140 && pixels[i + 2] === 109) count++;
+      return count;
+    }, id);
+    const farWidth = await renderedWidth();
+    await page.locator('#obstacle').fill('0.7');
+    assert.ok(await renderedWidth() > farWidth * 4);
+    assert.ok((await page.locator('#camera-' + id + ' canvas').getAttribute('aria-label')).includes('0.70 meters'));
+    assert.equal(await page.locator('#map-' + id + ' strong').innerText(), '0.70 m');
+    const nearestMapReturn = await page.evaluate(sensor => {
+      const pose = L.DEMO_POSES[sensor];
+      return Math.min(...[...document.querySelectorAll('#mapPoints circle')].filter(p => p.dataset.sources.split(',').includes(sensor)).map(p => Math.hypot(Number(p.getAttribute('cx')) - pose.x_m, -Number(p.getAttribute('cy')) - pose.y_m)));
+    }, id);
+    assert.ok(Math.abs(nearestMapReturn - 0.7) < 0.001);
+  }
   for (const id of ['boom', 'rear', 'left', 'right']) { await page.locator('#demoSensor').selectOption(id); await page.locator('#obstacle').fill('9'); }
   await page.locator('#demoSensor').selectOption('rear');
   await page.locator('#obstacle').fill('2.5');

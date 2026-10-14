@@ -17,11 +17,11 @@ Open http://localhost:4317. No application dependencies are needed to run the da
 Each sensor has two sliders:
 
 - **Max range:** the distance at which slow, low-pitched beeps begin.
-- **Full tone at:** the near distance where the scale finishes in a sustained, high-pitched tone.
+- **Full tone at:** the near distance where the scale finishes in a sustained tone at the upper end of the lower pitch range.
 
-Between those distances, pitch rises continuously from 420 Hz to 2000 Hz, the pulse period falls from 1.2 seconds to 0.12 seconds, and pulse duty rises from 10% to 95%. The final 2% of the curve transitions to a sustained tone. At or below Full tone at, sound stays at the high end. Outside Max range, that sensor is silent.
+Between those distances, pitch rises continuously through a low, compact 240–480 Hz range, the pulse period falls from 1.2 seconds to 0.12 seconds, and pulse duty rises from 10% to 95%. The final 2% of the curve transitions to a sustained tone. At or below Full tone at, sound stays at the high end. Outside Max range, that sensor is silent.
 
-The most urgent normalized sensor controls one tone so multiple views do not produce overlapping beeps. Volume is separate. Click Enable beeps to allow browser audio, then use Try a scenario to move an obstacle on any side. Settings are saved in this browser; version-one front settings migrate to boom settings.
+The most urgent normalized sensor controls one tone so multiple views do not produce overlapping beeps. Volume is separate. Click Enable beeps to allow browser audio, then use Try a scenario to move an obstacle on any side. Each simulated camera uses that same sensor distance: the obstacle grows as it gets closer and shrinks as it moves away. A shared 0.8 m obstacle width drives both its camera projection and map returns. Settings are saved in this browser; version-one front settings migrate to boom settings.
 
 ## Cameras and live distances
 

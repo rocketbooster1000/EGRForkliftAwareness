@@ -2,6 +2,13 @@
   'use strict';
   const IDS = ['boom', 'rear', 'left', 'right'];
   const STALE_MS = 3000;
+  const AUDIO_MIN_HZ = 240, AUDIO_MAX_HZ = 480;
+  const DEMO_OBSTACLE = { width_m: 0.8, height_m: 1.2, camera_height_m: 0.9 };
+  function demoScan(distance) {
+    return [-DEMO_OBSTACLE.width_m / 2, 0, DEMO_OBSTACLE.width_m / 2].map(x => ({
+      distance_m: Math.hypot(distance, x), bearing_deg: Math.atan2(x, distance) * 180 / Math.PI
+    }));
+  }
   const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
   const finite = n => typeof n === 'number' && Number.isFinite(n);
   // x points right, y points forward. Yaw/bearing rotate clockwise from forward.
@@ -23,7 +30,7 @@
     const progress = clamp((maxRange - distance) / (maxRange - fullTone), 0, 1);
     return {
       state: progress >= 0.98 ? 'close' : 'approaching', active: true, progress,
-      frequencyHz: 420 + 1580 * Math.pow(progress, 1.15),
+      frequencyHz: AUDIO_MIN_HZ + (AUDIO_MAX_HZ - AUDIO_MIN_HZ) * Math.pow(progress, 1.15),
       periodSeconds: 0.12 + 1.08 * Math.pow(1 - progress, 1.65),
       duty: 0.1 + 0.85 * progress,
       continuous: progress >= 0.98
@@ -90,7 +97,7 @@
     }
     return { points: [...cells.values()].map(c => ({ x_m: c.x_m / c.count, y_m: c.y_m / c.count, count: c.count, sources: [...c.sources], urgency: c.urgency })), unplaced, freshSensors };
   }
-  const api = { IDS, STALE_MS, DEMO_POSES, normalizeSettings, alertProfile, parseMeasurement, parseFrame, projectPoint, fuseReadings };
+  const api = { IDS, STALE_MS, AUDIO_MIN_HZ, AUDIO_MAX_HZ, DEMO_OBSTACLE, demoScan, DEMO_POSES, normalizeSettings, alertProfile, parseMeasurement, parseFrame, projectPoint, fuseReadings };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.SurroundLogic = api;
 })(globalThis);

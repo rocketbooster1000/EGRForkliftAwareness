@@ -11,7 +11,8 @@ test('sound increases continuously with decreasing distance and ends in sustaine
     previous = p;
   }
   assert.equal(L.alertProfile(0.5, settings).continuous, true);
-  assert.equal(L.alertProfile(0, settings).frequencyHz, 2000);
+  assert.equal(L.alertProfile(0, settings).frequencyHz, 480);
+  assert.equal(L.alertProfile(3, settings).frequencyHz, 240);
   assert.equal(L.alertProfile(3.001, settings).active, false);
   assert.equal(L.alertProfile(NaN, settings).state, 'stale');
   assert.equal(L.alertProfile(-1, settings).state, 'stale');
@@ -55,4 +56,12 @@ test('moving boom pose changes projection without reusing an old pose', () => {
   assert.equal(L.projectPoint(before.pose, { distance_m: 1, bearing_deg: 0 }).y_m, 3);
   assert.equal(L.projectPoint(after.pose, { distance_m: 1, bearing_deg: 0 }).y_m, 5);
   assert.equal(L.parseFrame({ sensor: 'boom', distance_m: 1 })[0].pose, null);
+});
+
+test('demo scan preserves a fixed object width at every simulated distance', () => {
+  for (const distance of [0.05, 0.7, 2, 5, 10]) {
+    const face = L.demoScan(distance).map(ray => L.projectPoint({ x_m: 0, y_m: 0, yaw_deg: 0 }, ray));
+    assert.ok(face.every(point => Math.abs(point.y_m - distance) < 1e-9));
+    assert.ok(Math.abs(face[2].x_m - face[0].x_m - 0.8) < 1e-9);
+  }
 });
