@@ -1,0 +1,10 @@
+{
+  "version": "0.2.0",
+  "configurations": [{
+    "name": "Open Surround (start server first)",
+    "type": "msedge",
+    "request": "launch",
+    "url": "http://localhost:4317",
+    "webRoot": "${workspaceFolder}"
+  }]
+}

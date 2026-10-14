@@ -1,0 +1,11 @@
+node_modules/
+*.log
+*-desktop.png
+*-mobile.png
+debug.png
+test-results/
+playwright-report/
+.env
+.env.*
+!.env.example
+.DS_Store

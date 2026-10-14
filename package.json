@@ -1,0 +1,13 @@
+{
+  "name": "surround-telehandler",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Telehandler camera dashboard with continuous distance audio and combined sensor mapping",
+  "scripts": {
+    "start": "node server.cjs",
+    "test": "node --test test.cjs",
+    "test:browser": "node browser-test.cjs"
+  },
+  "engines": { "node": ">=20" },
+  "devDependencies": { "playwright": "1.62.1" }
+}
