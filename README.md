@@ -25,11 +25,15 @@ Between those distances, pitch rises continuously through a low, compact 240–4
 
 The most urgent normalized sensor controls one tone so multiple views do not produce overlapping beeps. Volume is separate. Click Enable beeps to allow browser audio, then use Try a scenario to move an obstacle on any side. Each simulated camera uses that same sensor distance: the obstacle grows as it gets closer and shrinks as it moves away. A shared 0.8 m obstacle width drives both its camera projection and map returns. Settings are saved in this browser; version-one front settings migrate to boom settings.
 
+## Connect your Pi camera and ultrasonic API
+
+The supplied API is integrated through `hardware/pi_bridge.py`. Open **Connect devices → Your Raspberry Pi setup** and enter the Pi address and its connection key. This connects annotated video, calibrated ultrasonic readings, person detections, and new-object events together. See [the Pi setup guide](docs/pi-setup.md) for the exact Pi command and calibration steps.
+
 ## Cameras and live distances
 
 Connect devices supports USB webcams and browser-compatible image/MJPEG or video URLs. Connect one USB camera to grant access and populate the device selectors; then choose distinct devices for the other positions. Reset stops the camera tracks. No recording or video upload is implemented.
 
-Depth readings need a local adapter for your eventual camera SDK or distance sensors. Connect its WebSocket URL. RTSP streams also need a browser-compatible bridge. See [the sensor protocol](docs/sensor-protocol.md) for scalar readings, scans, poses, and synchronized frames.
+Your camera/ultrasonic adapter is included in `hardware/`. Other depth cameras or distance sensors can also use the generic WebSocket interface. Connect its WebSocket URL. RTSP streams also need a browser-compatible bridge. See [the sensor protocol](docs/sensor-protocol.md) for scalar readings, scans, poses, and synchronized frames.
 
 ## Combined proximity map
 
@@ -51,4 +55,4 @@ Browser tests start their own temporary server on port 4318, use a simulated web
 
 ## Current scope
 
-This classroom prototype plays alerts in the browser. Hardware camera SDK integration, object detection, physical buzzer firmware, measured vehicle geometry, and real sensor calibration depend on the selected hardware. The map is a 2D projection; the adapter must select relevant height slices before sending depth rays. This prototype is not a vehicle safety system, and browser audio/timers can pause in the background.
+This classroom prototype plays alerts in the browser. The supplied Picamera2/ultrasonic API and its HOG person detection are connected through the Pi bridge. Physical buzzer firmware, measured vehicle geometry, and actual sensor/boom calibration still depend on your hardware setup. The map is a 2D projection; the adapter must select relevant height slices before sending depth rays. This prototype is not a vehicle safety system, and browser audio/timers can pause in the background.

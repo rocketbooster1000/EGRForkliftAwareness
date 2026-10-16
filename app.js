@@ -24,7 +24,7 @@ function log(message, level = 'clear') {
   while ($('log').children.length > 35) $('log').lastChild.remove();
 }
 function buildSensors() {
-  $('sensorList').innerHTML = ids.map(id => `<div class="sensor" id="sensor-${id}"><div class="sensor-head"><span class="sensor-name">${title(id)} sensor</span><span class="reading" id="reading-${id}">—</span></div><div class="sensor-status" id="status-${id}"></div><label class="range-label" for="maxRange-${id}">Max range <output id="maxRangeValue-${id}"></output></label><input type="range" id="maxRange-${id}" min="1" max="15" step="0.1" value="${L.metersToFeet(sensors[id].maxRange).toFixed(1)}"><label class="range-label" for="fullTone-${id}">Full tone at <output id="fullToneValue-${id}"></output></label><input class="critical-range" type="range" id="fullTone-${id}" min="0.1" max="14.9" step="0.1" value="${L.metersToFeet(sensors[id].fullTone).toFixed(1)}"><div class="urgency-track"><span id="urgency-${id}"></span></div></div>`).join('');
+  $('sensorList').innerHTML = ids.map(id => `<div class="sensor" id="sensor-${id}"><div class="sensor-head"><span class="sensor-name">${title(id)} sensor</span><span class="reading" id="reading-${id}">—</span></div><div class="sensor-status" id="status-${id}"></div><p class="hardware-meta" id="hardware-${id}" hidden></p><label class="range-label" for="maxRange-${id}">Max range <output id="maxRangeValue-${id}"></output></label><input type="range" id="maxRange-${id}" min="1" max="15" step="0.1" value="${L.metersToFeet(sensors[id].maxRange).toFixed(1)}"><label class="range-label" for="fullTone-${id}">Full tone at <output id="fullToneValue-${id}"></output></label><input class="critical-range" type="range" id="fullTone-${id}" min="0.1" max="14.9" step="0.1" value="${L.metersToFeet(sensors[id].fullTone).toFixed(1)}"><div class="urgency-track"><span id="urgency-${id}"></span></div></div>`).join('');
   ids.forEach(id => ['maxRange', 'fullTone'].forEach(key => $(`${key}-${id}`).addEventListener('input', e => {
     const s = sensors[id];
     let maxFeet = Number($('maxRange-' + id).value), toneFeet = Number($('fullTone-' + id).value);
@@ -51,6 +51,12 @@ function renderSensors() {
     $(`sensor-${id}`).className = 'sensor ' + next;
     $(`reading-${id}`).innerHTML = next === 'stale' ? '— <small>ft</small>' : `${L.metersToFeet(s.distance).toFixed(2)} <small>ft</small>`;
     $(`status-${id}`).textContent = (mode === 'demo' ? 'SIMULATED · ' : 'LIVE · ') + ({ clear: 'OUTSIDE ALERT RANGE', approaching: 'INTENSITY ' + Math.round(profile.progress * 100) + '%', close: 'FULL TONE', stale: 'NO FRESH DATA' }[next]);
+    const hardware = s.hardware, hardwareFresh = hardware && now - hardware.updated < L.STALE_MS;
+    const metadata = $('hardware-' + id); metadata.hidden = !hardware;
+    if (hardwareFresh) {
+      metadata.textContent = 'Ultrasonic · limit ' + formatDistance(hardware.maxRange) + ' · ' + (hardware.people === null ? 'people detection unavailable' : hardware.people + ' people detected') + (hardware.newObject ? ' · NEW OBJECT' : '');
+      if (hardware.rangeStatus === 'at_limit') $('status-' + id).textContent = 'LIVE · AT SENSOR LIMIT / NO EXACT DISTANCE';
+    } else if (hardware) metadata.textContent = 'Hardware feed unavailable';
     ['maxRange', 'fullTone'].forEach(key => $(`${key}Value-${id}`).textContent = formatDistance(s[key], 1));
     $(`urgency-${id}`).style.width = (profile.progress * 100) + '%';
     $(`map-${id}`).className = 'map-readout ' + next;
@@ -145,8 +151,9 @@ function drawDemos() {
 }
 
 function updateCameraCount(){$('cameraCount').textContent=ids.filter(id=>cameras[id].kind==='live').length+' connected';}
-function stopCamera(id){
- const cam=cameras[id];cam.token++;if(cam.stream)cam.stream.getTracks().forEach(t=>t.stop());cam.stream=null;cam.kind='demo';
+function stopCamera(id, keepPi = false){
+ if (!keepPi && typeof detachPiSensor === 'function') detachPiSensor(id);
+ const cam=cameras[id];cam.token++;if(cam.stream)cam.stream.getTracks().forEach(t=>t.stop());cam.stream=null;cam.kind='demo';cam.piBase=null;
  const old=$('camera-'+id);old.querySelectorAll('video').forEach(v=>{v.pause();v.srcObject=null;v.removeAttribute('src');v.load();});old.querySelectorAll('img').forEach(i=>i.removeAttribute('src'));
  old.replaceWith(cameraElement(id));renderCameras();updateCameraCount();
 }
@@ -204,7 +211,7 @@ function syncDemoControl() { const value = sensors[$('demoSensor').value].distan
 $('demoSensor').onchange = syncDemoControl;
 $('obstacle').oninput = e => { if (mode !== 'demo') return; sensors[$('demoSensor').value].distance = L.feetToMeters(Number(e.target.value)); syncDemoControl(); renderSensors(); };
 function resetDemo() {
-  ids.forEach((id, i) => Object.assign(sensors[id], { distance: demoDistances[i], updated: Date.now(), pose: L.DEMO_POSES[id], points: demoPoints(demoDistances[i]) })); syncDemoControl(); renderSensors();
+  ids.forEach((id, i) => Object.assign(sensors[id], { distance: demoDistances[i], updated: Date.now(), pose: L.DEMO_POSES[id], points: demoPoints(demoDistances[i]), hardware: null })); syncDemoControl(); renderSensors();
 }
 $('resetDemo').onclick = () => { if (mode === 'demo') resetDemo(); };
 function setMode(next) {
@@ -220,6 +227,7 @@ $('connectSensors').onclick = () => {
     if (!['ws:', 'wss:'].includes(url.protocol)) throw new Error('Use ws:// or wss://.');
     if (location.protocol === 'https:' && url.protocol !== 'wss:') throw new Error('HTTPS requires wss://, or use this app on localhost.');
   } catch (error) { $('connectionStatus').textContent = 'Invalid sensor URL: ' + error.message; return; }
+  closePiSources();
   if (socket) { socket.onclose = null; socket.close(); }
   setMode('live'); invalidateReadings(); $('connectionStatus').textContent = 'Connecting…';
   let current;
@@ -242,9 +250,10 @@ $('connectSensors').onclick = () => {
   };
 };
 $('disconnectSensors').onclick = () => {
+  closePiSources();
   if (socket) { socket.onclose = null; socket.close(); socket = null; }
   setMode('demo'); resetDemo(); $('connectionStatus').textContent = 'Using simulated distance readings.';
 };
-window.addEventListener('beforeunload', () => { ids.forEach(id => cameras[id].stream?.getTracks().forEach(t => t.stop())); socket?.close(); audio.close(); });
+window.addEventListener('beforeunload', () => { ids.forEach(id => cameras[id].stream?.getTracks().forEach(t => t.stop())); socket?.close(); closePiSources(); audio.close(); });
 window.addEventListener('resize', drawDemos);
 buildSensors(); buildSetup(); renderCameras(); syncDemoControl(); renderSensors(); log('Telehandler demo ready. Try each side and adjust the sound curve.'); setInterval(renderSensors, 100);

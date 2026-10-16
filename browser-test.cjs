@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs/promises');
+const http = require('node:http');
+let piFixture;
 const base = 'http://127.0.0.1:4318';
 const server = spawn(process.execPath, ['server.cjs'], { cwd: __dirname, env: { ...process.env, PORT: '4318' }, stdio: 'pipe' });
 let browser;
@@ -118,6 +120,52 @@ async function waitForServer() {
   send({ sensor: 'boom', distance_m: 0.2 });
   await page.waitForFunction(() => document.getElementById('sensor-boom').classList.contains('close'));
   bridge.close(); await page.waitForFunction(() => document.getElementById('sensor-boom').classList.contains('stale'));
+  // Exercise the authenticated Pi connector over real local HTTP, with simulated hardware samples.
+  const fixtureKey = 'fixture-key-for-browser-tests-only';
+  let piSequence = 0, piFrozen = false, piRange = 'valid';
+  piFixture = http.createServer((request, response) => {
+    const origin = request.headers.origin;
+    const headers = { 'Cache-Control': 'no-store' };
+    if (origin === base) headers['Access-Control-Allow-Origin'] = origin;
+    if (request.method === 'OPTIONS') { response.writeHead(204, { ...headers, 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Authorization' }); response.end(); return; }
+    const url = new URL(request.url, 'http://localhost');
+    if (request.headers.authorization !== 'Bearer ' + fixtureKey && url.searchParams.get('key') !== fixtureKey) { response.writeHead(401, { ...headers, 'Content-Type': 'application/json' }); response.end('{}'); return; }
+    if (url.pathname === '/video.mjpg') {
+      response.writeHead(200, { ...headers, 'Content-Type': 'image/png' });
+      response.end(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jlp0AAAAASUVORK5CYII=', 'base64')); return;
+    }
+    if (!piFrozen) piSequence++;
+    response.writeHead(200, { ...headers, 'Content-Type': 'application/json' });
+    response.end(JSON.stringify({ ready: true, sequence: piSequence, age_ms: 0, sensor: 'boom', distance_m: piRange === 'valid' ? 1.25 : null, range_status: piRange, sensor_max_m: 4, pose: { x_m: .45, y_m: 3.1, yaw_deg: 0 }, detections: { people: [[0,0,20,40], [20,0,20,40]], new_object: true }, camera: { width: 640, height: 480 } }));
+  });
+  await new Promise(resolve => piFixture.listen(0, '127.0.0.1', resolve));
+  const piBase = 'http://127.0.0.1:' + piFixture.address().port;
+  await page.locator('#piUrl').fill(piBase); await page.locator('#piKey').fill('incorrect-fixture-key-for-test'); await page.locator('#connectPi').click();
+  await page.waitForFunction(() => document.getElementById('piStatus').textContent.includes('key rejected'));
+  await page.locator('#piKey').fill(fixtureKey); await page.locator('#connectPi').click();
+  await page.waitForFunction(() => document.getElementById('map-boom').querySelector('strong').textContent === '4.10 ft');
+  await page.waitForFunction(() => document.getElementById('cameraCount').textContent === '1 connected');
+  assert.ok((await page.locator('#hardware-boom').innerText()).includes('2 people detected'));
+  assert.ok((await page.locator('#hardware-boom').innerText()).includes('NEW OBJECT'));
+  assert.ok((await page.locator('#hardware-boom').innerText()).includes('13.12 ft'));
+  assert.equal(await page.evaluate(key => JSON.stringify(localStorage).includes(key), fixtureKey), false);
+  await page.getByRole('button', { name: 'Close device setup' }).click();
+  await page.locator('#audio').click();
+  assert.equal(await page.evaluate(() => audio.profile.sensor), 'boom');
+  piRange = 'at_limit';
+  await page.waitForFunction(() => document.getElementById('status-boom').textContent.includes('AT SENSOR LIMIT'));
+  assert.equal(await page.evaluate(() => audio.profile), null);
+  assert.equal(await page.locator('#mapPoints circle').count(), 0);
+  piRange = 'valid'; await page.waitForFunction(() => document.getElementById('map-boom').querySelector('strong').textContent === '4.10 ft');
+  piFrozen = true;
+  await page.waitForFunction(() => document.getElementById('sensor-boom').classList.contains('stale'), {}, { timeout: 5000 });
+  await page.waitForFunction(() => document.getElementById('camera-boom').classList.contains('stale-video'), {}, { timeout: 5000 });
+  assert.equal(await page.evaluate(() => audio.profile), null);
+  piFrozen = false;
+  await page.waitForFunction(() => document.getElementById('map-boom').querySelector('strong').textContent === '4.10 ft');
+  await page.locator('#audio').click(); await page.locator('#settingsButton').click(); await page.locator('#disconnectPi').click();
+  assert.equal(await page.locator('#cameraCount').innerText(), '0 connected');
+  assert.equal(await page.locator('#mapPoints circle').count(), 0);
   await page.locator('#disconnectSensors').click(); await page.getByRole('button', { name: 'Close device setup' }).click();
   await page.locator('#maxRange-rear').fill('10'); await page.locator('#fullTone-rear').fill('2');
   const results = path.join(__dirname, 'test-results'); await fs.mkdir(results, { recursive: true });
@@ -126,5 +174,5 @@ async function waitForServer() {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: path.join(results, 'dashboard-mobile.png'), fullPage: true });
   assert.deepEqual(errors, []);
-  console.log('Browser checks passed: telehandler/boom layout; continuous pitch/rate and sustained audio; mute; two sliders and persistence; USB; multi-sensor fusion; moving boom; missing poses; stale/invalid readings; disconnect; demo recovery; mobile width.');
-})().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => { await browser?.close(); server.kill(); });
+  console.log('Browser checks passed: telehandler/boom layout; continuous pitch/rate and sustained audio; mute; two sliders and persistence; USB; multi-sensor fusion; moving boom; missing poses; stale/invalid readings; disconnect; demo recovery; authenticated Pi data/video; cm-to-ft display; detections; limit/no-data handling; frozen sequence expiry; mobile width.');
+})().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => { await browser?.close(); server.kill(); if (piFixture) await new Promise(resolve => piFixture.close(resolve)); });

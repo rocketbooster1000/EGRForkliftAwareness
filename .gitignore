@@ -9,3 +9,10 @@ playwright-report/
 .env.*
 !.env.example
 .DS_Store
+
+# Pi-specific state belongs on the Pi, not in Git.
+__pycache__/
+*.pyc
+hardware/calibration.json
+hardware/pose.json
+hardware/bridge-token.txt
