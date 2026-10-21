@@ -13,3 +13,6 @@
 .light-enable input { width: auto; accent-color: #ffbf38; }
 .driver-light-panel select { width: 100%; margin-bottom: 16px; }
 .driver-light-panel .connection-row { flex-wrap: wrap; }
+
+[hidden] { display: none !important; }
+#sharedRangeControls { padding-bottom: 14px; border-bottom: 1px solid var(--line); }

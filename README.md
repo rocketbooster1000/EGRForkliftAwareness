@@ -61,3 +61,5 @@ This classroom prototype plays alerts in the browser. The supplied Picamera2/ult
 ## Driver warning light
 
 The dashboard includes a separate **Driver warning light** panel with a sensor selector, adjustable distance in feet, enable/apply controls, a two-second test, and Pi-reported status. In demo mode it previews an amber indicator only. With the optional Pi LED configured, the Pi handles flashing locally even when the browser closes. See [LED wiring and setup](docs/pi-setup.md#driver-facing-amber-warning-led). Physical wiring and output still require testing on the actual Pi.
+
+Distance controls default to one shared Max range / Full tone at pair for all four sides. Turn off **Use the same distances for all sides** to adjust each side separately. The driver light follows its selected sensor’s Full tone at by default; **Set light distance manually** reveals its independent slider. Physical light changes still require **Apply to Pi**.

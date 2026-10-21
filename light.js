@@ -4,6 +4,7 @@ let lightBusy = false, lightPollBusy = false, lightRevision = 0, demoLightTestUn
 let lightReported = null, lightReportedAt = 0, lightReportedBase = null;
 try {
   const pref = JSON.parse(localStorage.getItem('surround-driver-light') || '{}');
+  $('lightManual').checked = pref.manual === true;
   if (ids.includes(pref.sensor)) $('lightSensor').value = pref.sensor;
   if (Number.isFinite(pref.feet) && pref.feet >= 0.1 && pref.feet <= 15) $('lightDistance').value = pref.feet;
 } catch {}
@@ -11,10 +12,13 @@ function selectedLightBridge() {
   if (mode === 'demo') return null;
   return [...piSources.values()].find(b => !b.stopped && b.sensor === $('lightSensor').value);
 }
+function lightThresholdMeters() {
+  return $('lightManual').checked ? L.feetToMeters(Number($('lightDistance').value)) : sensors[$('lightSensor').value].fullTone;
+}
 function lightPrefsChanged() {
   lightRevision++;
   demoLightTestUntil = 0;
-  try { localStorage.setItem('surround-driver-light', JSON.stringify({ sensor: $('lightSensor').value, feet: Number($('lightDistance').value) })); } catch {}
+  try { localStorage.setItem('surround-driver-light', JSON.stringify({ sensor: $('lightSensor').value, feet: Number($('lightDistance').value), manual: $('lightManual').checked })); } catch {}
   $('lightMessage').textContent = mode === 'demo' ? 'Demo preview only. No hardware commands are sent.' : 'Changes are not applied. Choose Apply to Pi.';
   renderDriverLight();
 }
@@ -42,7 +46,7 @@ async function changeDriverLight(test) {
   const revision = ++lightRevision;
   renderDriverLight();
   try {
-    const data = await lightRequest(bridge, test ? '/api/light/test' : '/api/light', test ? {} : { enabled: $('lightEnabled').checked, threshold_m: L.feetToMeters(Number($('lightDistance').value)) });
+    const data = await lightRequest(bridge, test ? '/api/light/test' : '/api/light', test ? {} : { enabled: $('lightEnabled').checked, threshold_m: lightThresholdMeters() });
     if (selectedLightBridge() !== bridge || revision !== lightRevision) return;
     rememberLight(bridge, data);
     $('lightMessage').textContent = test ? 'Two-second physical light test requested. Check the LED.' : 'Applied to ' + title(bridge.sensor) + ' Pi. Its local controller now handles the light.';
@@ -54,7 +58,10 @@ async function changeDriverLight(test) {
   } finally { lightBusy = false; renderDriverLight(); }
 }
 function renderDriverLight() {
-  const demo = mode === 'demo', bridge = selectedLightBridge(), feet = Number($('lightDistance').value);
+  const demo = mode === 'demo', bridge = selectedLightBridge(), feet = L.metersToFeet(lightThresholdMeters());
+  $('lightManualControls').hidden = !$('lightManual').checked;
+  $('lightLinkedSummary').hidden = $('lightManual').checked;
+  $('lightLinkedSummary').textContent = 'Synced to ' + title($('lightSensor').value) + ' Full tone at · ' + feet.toFixed(1) + ' ft. Apply to Pi to update the physical light.';
   $('lightDistanceValue').textContent = feet.toFixed(1) + ' ft';
   $('lightMode').textContent = demo ? 'DEMO' : 'PHYSICAL LED';
   $('applyLight').disabled = demo || !bridge || lightBusy;
@@ -89,6 +96,8 @@ async function pollDriverLight() {
   finally { lightPollBusy = false; renderDriverLight(); }
 }
 $('lightDistance').oninput = lightPrefsChanged;
+$('lightManual').onchange = lightPrefsChanged;
+window.addEventListener('surround-distance-settings', () => { if (!$('lightManual').checked) lightPrefsChanged(); });
 $('lightSensor').onchange = () => { lightReportedAt = 0; lightPrefsChanged(); pollDriverLight(); };
 $('lightEnabled').onchange = lightPrefsChanged;
 $('applyLight').onclick = () => changeDriverLight(false);

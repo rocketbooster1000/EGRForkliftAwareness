@@ -9,7 +9,7 @@ function fixture(fetcher) {
     if (!nodes.has(id)) nodes.set(id, { value: id === 'lightSensor' ? 'boom' : id === 'lightDistance' ? '3' : '', checked: false, textContent: '', classList: { toggle() {} }, setAttribute() {} });
     return nodes.get(id);
   };
-  const context = vm.createContext({ $, L, ids: L.IDS, mode:'demo', piSources:new Map(), sensors:{boom:{distance:.5}}, Date, Number, JSON, Map, URL, AbortController, setTimeout, clearTimeout, setInterval() {}, localStorage:{getItem(){return null;},setItem(){}}, title:id=>id, formatDistance:m=>(m/.3048).toFixed(1)+' ft', fetch:async (...args)=>{calls.push(args);return fetcher(...args);} });
+  const context = vm.createContext({ window:{addEventListener(){}}, $, L, ids: L.IDS, mode:'demo', piSources:new Map(), sensors:{boom:{distance:.5,fullTone:.9144000000000001},rear:{distance:2,fullTone:.3048}}, Date, Number, JSON, Map, URL, AbortController, setTimeout, clearTimeout, setInterval() {}, localStorage:{getItem(){return null;},setItem(){}}, title:id=>id, formatDistance:m=>(m/.3048).toFixed(1)+' ft', fetch:async (...args)=>{calls.push(args);return fetcher(...args);} });
   vm.runInContext(fs.readFileSync('light.js','utf8'),context);
   return { context, $, calls, run:code=>vm.runInContext(code,context) };
 }
@@ -48,4 +48,16 @@ test('response from a previously selected Pi is ignored',async()=>{
   const pending=f.run('changeDriverLight(false)');
   f.$('lightSensor').value='rear';f.run('lightPrefsChanged()');release();await pending;
   assert.doesNotMatch(f.$('lightMessage').textContent,/Applied to/);
+});
+
+test('light follows selected full tone by default and manual override is independent',()=>{
+  const f=fixture(()=>{throw Error('Unexpected network');});
+  assert.ok(Math.abs(f.run('lightThresholdMeters()')-.9144)<1e-9);
+  f.context.sensors.boom.fullTone=.6096;
+  assert.equal(f.run('lightThresholdMeters()'),.6096);
+  f.$('lightSensor').value='rear'; assert.equal(f.run('lightThresholdMeters()'),.3048);
+  f.$('lightManual').checked=true;f.$('lightDistance').value='5';
+  assert.equal(f.run('lightThresholdMeters()'),1.524);
+  f.context.sensors.rear.fullTone=.7; assert.equal(f.run('lightThresholdMeters()'),1.524);
+  f.$('lightManual').checked=false; assert.equal(f.run('lightThresholdMeters()'),.7);
 });

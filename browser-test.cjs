@@ -30,6 +30,20 @@ async function waitForServer() {
   await page.reload();
   assert.equal(await page.locator('#maxRange-boom').inputValue(), '15');
   assert.equal(await page.evaluate(() => sensors.boom.maxRange), 4.572);
+  assert.equal(await page.locator('#maxRange-boom').isVisible(), false);
+  assert.equal(await page.locator('#lightManualControls').isVisible(), false);
+  await page.locator('#fullTone-all').fill('3');
+  assert.equal(await page.evaluate(() => ids.every(id => Math.abs(sensors[id].fullTone - .9144) < 1e-9)), true);
+  assert.match(await page.locator('#lightLinkedSummary').textContent(), /3.0 ft/);
+  await page.locator('#lightManual').check();
+  await page.locator('#lightDistance').fill('5');
+  await page.locator('#fullTone-all').fill('4');
+  assert.equal(await page.locator('#lightDistance').inputValue(), '5');
+  await page.locator('#lightManual').uncheck();
+  assert.match(await page.locator('#lightLinkedSummary').textContent(), /4.0 ft/);
+  await page.locator('#maxRange-all').fill('10');
+  await page.locator('#fullTone-all').fill('2');
+  await page.locator('#sharedRanges').uncheck();
   await page.locator('#maxRange-boom').fill('10'); await page.locator('#fullTone-boom').fill('2');
   assert.equal(await page.title(), 'Telehandler · Surround');
   assert.equal(await page.locator('#camera-front').count(), 0);
@@ -176,3 +190,4 @@ async function waitForServer() {
   assert.deepEqual(errors, []);
   console.log('Browser checks passed: telehandler/boom layout; continuous pitch/rate and sustained audio; mute; two sliders and persistence; USB; multi-sensor fusion; moving boom; missing poses; stale/invalid readings; disconnect; demo recovery; authenticated Pi data/video; cm-to-ft display; detections; limit/no-data handling; frozen sequence expiry; mobile width.');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => { await browser?.close(); server.kill(); if (piFixture) await new Promise(resolve => piFixture.close(resolve)); });
+

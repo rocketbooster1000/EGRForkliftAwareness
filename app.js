@@ -10,11 +10,35 @@ const sensors = Object.fromEntries(ids.map((id, i) => {
   const pref = stored[id] || (id === 'boom' ? stored.front : null) || {};
   return [id, { ...L.normalizeSettings({ maxRange: pref.maxRange ?? pref.warning, fullTone: pref.fullTone ?? pref.critical }), distance: demoDistances[i], updated: Date.now(), pose: L.DEMO_POSES[id], points: null, status: 'clear' }];
 }));
+let sharedRanges = stored.sharedRanges !== false;
+let sharedSettings = L.normalizeSettings(stored.sharedSettings || sensors.boom);
+if (sharedRanges) ids.forEach(id => Object.assign(sensors[id], sharedSettings));
+function applyDistanceSettings(target, key, maxFeet, toneFeet) {
+  if (key === 'maxRange') toneFeet = Math.min(toneFeet, Math.round((maxFeet - 0.1) * 10) / 10);
+  else maxFeet = Math.max(maxFeet, Math.round((toneFeet + 0.1) * 10) / 10);
+  Object.assign(target, L.normalizeSettings({ maxRange: L.feetToMeters(maxFeet), fullTone: L.feetToMeters(toneFeet) }));
+}
+function syncRangeControls() {
+  $('sharedRanges').checked = sharedRanges;
+  $('sharedRangeControls').hidden = !sharedRanges;
+  ids.forEach(id => {
+    $('ranges-' + id).hidden = sharedRanges;
+    ['maxRange', 'fullTone'].forEach(key => $(key + '-' + id).value = L.metersToFeet(sensors[id][key]).toFixed(1));
+  });
+  ['maxRange', 'fullTone'].forEach(key => {
+    $(key + '-all').value = L.metersToFeet(sharedSettings[key]).toFixed(1);
+    $(key + 'Value-all').textContent = formatDistance(sharedSettings[key], 1);
+  });
+}
+function distanceSettingsChanged() {
+  syncRangeControls(); save(); renderSensors();
+  window.dispatchEvent(new Event('surround-distance-settings'));
+}
 const cameras = Object.fromEntries(ids.map(id => [id, { kind: 'demo', stream: null, token: 0 }]));
 const audio = new ProximityAudio();
 let mode = 'demo', socket = null, soundOn = false, layout = stored.layout === 1 ? 1 : 4, userCameras = [];
 function save() {
-  try { localStorage.setItem('surround-settings-v2', JSON.stringify({ ...Object.fromEntries(ids.map(id => [id, { maxRange: sensors[id].maxRange, fullTone: sensors[id].fullTone }])), layout })); }
+  try { localStorage.setItem('surround-settings-v2', JSON.stringify({ ...Object.fromEntries(ids.map(id => [id, { maxRange: sensors[id].maxRange, fullTone: sensors[id].fullTone }])), layout, sharedRanges, sharedSettings })); }
   catch { $('footerStatus').textContent = 'Settings cannot be saved in this browser.'; }
 }
 function log(message, level = 'clear') {
@@ -24,16 +48,23 @@ function log(message, level = 'clear') {
   while ($('log').children.length > 35) $('log').lastChild.remove();
 }
 function buildSensors() {
-  $('sensorList').innerHTML = ids.map(id => `<div class="sensor" id="sensor-${id}"><div class="sensor-head"><span class="sensor-name">${title(id)} sensor</span><span class="reading" id="reading-${id}">—</span></div><div class="sensor-status" id="status-${id}"></div><p class="hardware-meta" id="hardware-${id}" hidden></p><label class="range-label" for="maxRange-${id}">Max range <output id="maxRangeValue-${id}"></output></label><input type="range" id="maxRange-${id}" min="1" max="15" step="0.1" value="${L.metersToFeet(sensors[id].maxRange).toFixed(1)}"><label class="range-label" for="fullTone-${id}">Full tone at <output id="fullToneValue-${id}"></output></label><input class="critical-range" type="range" id="fullTone-${id}" min="0.1" max="14.9" step="0.1" value="${L.metersToFeet(sensors[id].fullTone).toFixed(1)}"><div class="urgency-track"><span id="urgency-${id}"></span></div></div>`).join('');
+  $('sensorList').innerHTML = ids.map(id => `<div class="sensor" id="sensor-${id}"><div class="sensor-head"><span class="sensor-name">${title(id)} sensor</span><span class="reading" id="reading-${id}">—</span></div><div class="sensor-status" id="status-${id}"></div><p class="hardware-meta" id="hardware-${id}" hidden></p><div id="ranges-${id}" class="sensor-range-controls"><label class="range-label" for="maxRange-${id}">Max range <output id="maxRangeValue-${id}"></output></label><input type="range" id="maxRange-${id}" min="1" max="15" step="0.1" value="${L.metersToFeet(sensors[id].maxRange).toFixed(1)}"><label class="range-label" for="fullTone-${id}">Full tone at <output id="fullToneValue-${id}"></output></label><input class="critical-range" type="range" id="fullTone-${id}" min="0.1" max="14.9" step="0.1" value="${L.metersToFeet(sensors[id].fullTone).toFixed(1)}"></div><div class="urgency-track"><span id="urgency-${id}"></span></div></div>`).join('');
   ids.forEach(id => ['maxRange', 'fullTone'].forEach(key => $(`${key}-${id}`).addEventListener('input', e => {
-    const s = sensors[id];
-    let maxFeet = Number($('maxRange-' + id).value), toneFeet = Number($('fullTone-' + id).value);
-    if (key === 'maxRange') toneFeet = Math.min(toneFeet, Math.round((maxFeet - 0.1) * 10) / 10);
-    else maxFeet = Math.max(maxFeet, Math.round((toneFeet + 0.1) * 10) / 10);
-    s.maxRange = L.feetToMeters(maxFeet); s.fullTone = L.feetToMeters(toneFeet);
-    ['maxRange', 'fullTone'].forEach(k => $(`${k}-${id}`).value = L.metersToFeet(s[k]).toFixed(1));
-    save(); renderSensors();
+    if (sharedRanges) return;
+    applyDistanceSettings(sensors[id], key, Number($('maxRange-' + id).value), Number($('fullTone-' + id).value));
+    distanceSettingsChanged();
   })));
+  $('sharedRanges').onchange = () => {
+    sharedRanges = $('sharedRanges').checked;
+    if (sharedRanges) ids.forEach(id => Object.assign(sensors[id], sharedSettings));
+    distanceSettingsChanged();
+  };
+  ['maxRange', 'fullTone'].forEach(key => $(key + '-all').oninput = () => {
+    applyDistanceSettings(sharedSettings, key, Number($('maxRange-all').value), Number($('fullTone-all').value));
+    if (sharedRanges) ids.forEach(id => Object.assign(sensors[id], sharedSettings));
+    distanceSettingsChanged();
+  });
+  syncRangeControls();
   $('mapReadouts').innerHTML = ids.map(id => `<div id="map-${id}" class="map-readout"><span>${title(id)}</span><strong>—</strong></div>`).join('');
 }
 function demoPoints(distance) { return L.demoScan(distance); }
@@ -257,3 +288,4 @@ $('disconnectSensors').onclick = () => {
 window.addEventListener('beforeunload', () => { ids.forEach(id => cameras[id].stream?.getTracks().forEach(t => t.stop())); socket?.close(); closePiSources(); audio.close(); });
 window.addEventListener('resize', drawDemos);
 buildSensors(); buildSetup(); renderCameras(); syncDemoControl(); renderSensors(); log('Telehandler demo ready. Try each side and adjust the sound curve.'); setInterval(renderSensors, 100);
+
