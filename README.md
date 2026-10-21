@@ -56,3 +56,8 @@ Browser tests start their own temporary server on port 4318, use a simulated web
 ## Current scope
 
 This classroom prototype plays alerts in the browser. The supplied Picamera2/ultrasonic API and its HOG person detection are connected through the Pi bridge. Physical buzzer firmware, measured vehicle geometry, and actual sensor/boom calibration still depend on your hardware setup. The map is a 2D projection; the adapter must select relevant height slices before sending depth rays. This prototype is not a vehicle safety system, and browser audio/timers can pause in the background.
+
+
+## Driver warning light
+
+The dashboard includes a separate **Driver warning light** panel with a sensor selector, adjustable distance in feet, enable/apply controls, a two-second test, and Pi-reported status. In demo mode it previews an amber indicator only. With the optional Pi LED configured, the Pi handles flashing locally even when the browser closes. See [LED wiring and setup](docs/pi-setup.md#driver-facing-amber-warning-led). Physical wiring and output still require testing on the actual Pi.
