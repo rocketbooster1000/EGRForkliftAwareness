@@ -15,11 +15,12 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
+from driver_light import DriverLight
 
 STALE_SECONDS = 3.0
 SENSOR_IDS = ("boom", "rear", "left", "right")
 STATIC_FILES = {"/": "index.html", **{f"/{name}": name for name in (
-    "index.html", "styles.css", "logic.js", "audio.js", "app.js", "pi.js"
+    "index.html", "styles.css", "logic.js", "audio.js", "app.js", "pi.js", "light.js"
 )}}
 CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8"}
 
@@ -158,7 +159,7 @@ class CaptureWorker(threading.Thread):
                     sensor.close()
 
 
-def make_handler(state, site_root, token, allowed_origins=()):
+def make_handler(state, site_root, token, allowed_origins=(), light=None):
     if not token:
         raise ValueError("A connection key is required")
 
@@ -200,8 +201,8 @@ def make_handler(state, site_root, token, allowed_origins=()):
                 return
             self.send_response(204)
             self.origin_headers()
-            self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Authorization")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
             self.send_header("Access-Control-Allow-Private-Network", "true")
             self.send_header("Content-Length", "0")
             self.end_headers()
@@ -209,11 +210,13 @@ def make_handler(state, site_root, token, allowed_origins=()):
         def do_GET(self):
             route = urlsplit(self.path).path
             try:
-                if route in ("/api/reading", "/health", "/video.mjpg") and not self.authorized():
+                if route in ("/api/reading", "/api/light", "/health", "/video.mjpg") and not self.authorized():
                     self.send_json({"error": "A valid Pi connection key is required"}, 401)
                     return
                 if route == "/api/reading":
                     self.send_json(state.snapshot())
+                elif route == "/api/light":
+                    self.send_json(light.status() if light else {"available": False, "reason": "not_configured"})
                 elif route == "/health":
                     packet = state.snapshot()
                     healthy = packet.get("ready") and packet.get("age_ms", 3000) < 3000 and not packet.get("error")
@@ -232,6 +235,41 @@ def make_handler(state, site_root, token, allowed_origins=()):
                     self.send_json({"error": "Not found"}, 404)
             except (BrokenPipeError, ConnectionResetError, TimeoutError):
                 pass
+
+        def do_POST(self):
+            # Mutations require a bearer header, never an image query-string key.
+            self.close_connection = True
+            supplied = self.headers.get("Authorization", "").removeprefix("Bearer ")
+            if not secrets.compare_digest(supplied.encode(), token.encode()):
+                self.send_json({"error": "A valid Pi connection key is required"}, 401)
+                return
+            origin = self.headers.get("Origin")
+            same_origin = "http://" + self.headers.get("Host", "")
+            if origin and origin != same_origin and origin not in allowed_origins:
+                self.send_json({"error": "Website origin is not allowed"}, 403)
+                return
+            route = urlsplit(self.path).path
+            if route not in ("/api/light", "/api/light/test"):
+                self.send_json({"error": "Not found"}, 404)
+                return
+            if light is None or not light.status()["available"]:
+                self.send_json({"error": "Start the Pi bridge with --light-pin to use the physical light"}, 409)
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 1024 or self.headers.get_content_type() != "application/json":
+                    raise ValueError("Send a small JSON request")
+                self.connection.settimeout(3)
+                value = json.loads(self.rfile.read(length))
+                if route == "/api/light/test":
+                    if value != {}:
+                        raise ValueError("Test body must be an empty object")
+                    result = light.test()
+                else:
+                    result = light.configure(value)
+                self.send_json(result)
+            except (ValueError, TypeError, TimeoutError):
+                self.send_json({"error": "Invalid light settings: use enabled true/false and a distance of 0.1–15 ft"}, 400)
 
         def stream_video(self):
             if not state.snapshot().get("ready"):
@@ -267,6 +305,7 @@ def parse_args(argv=None):
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--sensor", choices=SENSOR_IDS, default="boom")
     parser.add_argument("--trigger", type=int, default=17, help="BCM trigger pin")
+    parser.add_argument("--light-pin", type=int, help="Optional BCM GPIO for a driver LED; disabled until enabled in the UI")
     parser.add_argument("--echo", type=int, default=18, help="BCM echo pin")
     parser.add_argument("--max-distance", type=float, default=4.0, help="Configured ultrasonic maximum in meters")
     parser.add_argument("--fps", type=float, default=10)
@@ -282,6 +321,8 @@ def parse_args(argv=None):
     if not (1 <= args.port <= 65535 and math.isfinite(args.fps) and 0 < args.fps <= 30 and args.people_every >= 1
             and math.isfinite(args.max_distance) and 0 < args.max_distance <= 100):
         parser.error("Invalid port, FPS, detection interval, or maximum distance")
+    if args.light_pin is not None and (args.light_pin not in range(2, 28) or args.light_pin in (args.trigger, args.echo)):
+        parser.error("Light pin must be an unused BCM GPIO between 2 and 27")
     if args.pose:
         try:
             validate_pose(dict(zip(("x_m", "y_m", "yaw_deg"), args.pose)))
@@ -313,7 +354,13 @@ def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     token = connection_key(args.token_file)
     state = StreamState()
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(state, Path(__file__).resolve().parent.parent, token, args.allow_origin))
+    output = None
+    if args.light_pin is not None:
+        from gpiozero import LED
+        output = LED(args.light_pin, initial_value=False)
+    light = DriverLight(state, output)
+    server = ThreadingHTTPServer((args.host, args.port), make_handler(state, Path(__file__).resolve().parent.parent, token, args.allow_origin, light))
+    light.start()
     server.daemon_threads = True
     worker = CaptureWorker(state, args)
     worker.start()
@@ -326,9 +373,11 @@ def main():
         state.stop.set()
         with state.condition:
             state.condition.notify_all()
+        light.close()
         server.server_close()
         worker.join(timeout=5)
 
 
 if __name__ == "__main__":
     main()
+

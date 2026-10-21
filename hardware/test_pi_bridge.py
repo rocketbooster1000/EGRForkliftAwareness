@@ -74,7 +74,7 @@ class BridgeTests(unittest.TestCase):
             response.read(); connection.close()
             connection, response = request("/api/reading", {"Origin": ORIGIN}, "OPTIONS")
             self.assertEqual(response.status, 204)
-            self.assertEqual(response.getheader("Access-Control-Allow-Headers"), "Authorization")
+            self.assertEqual(response.getheader("Access-Control-Allow-Headers"), "Authorization, Content-Type")
             response.read(); connection.close()
             connection, response = request("/video.mjpg?key=" + KEY)
             self.assertEqual(response.status, 200)
@@ -97,3 +97,4 @@ class BridgeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
