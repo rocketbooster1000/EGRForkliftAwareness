@@ -83,3 +83,16 @@ python3 -m unittest discover -s hardware -p 'test_*.py' -v
 ```
 
 Transport, authentication, unit conversion, stale-sample handling, and browser ingestion can be checked without Pi hardware. Actual Picamera2/GPIO capture and the hardware wiring must still be verified on your Pi.
+
+
+## Driver-facing amber warning LED
+
+Use a regular amber LED (not a self-flashing LED), a **1 kΩ series resistor**, and ground. With the Pi shut down and unplugged, wire **BCM GPIO23 (physical pin 16) → resistor → LED anode (+)** and **LED cathode (−) → ground (physical pin 14)**. The cathode is normally the shorter leg / flat side; verify your component. Prototype on a breadboard before soldering, insulate joints, and use strain relief. GPIO23 must be unused; the ultrasonic defaults already occupy BCM17/18. Never connect a beacon or higher-current lamp directly to GPIO; those need a suitable driver and supply. The HC-SR04 echo must already have appropriate 5 V to 3.3 V level shifting.
+
+Add `--light-pin 23` to your existing Pi bridge command. GPIO is optional: the normal bridge works without a light. It starts disabled every time the process restarts. No physical circuit has been verified by the software tests.
+
+In **Driver warning light**, select the Pi's sensor, choose **Flash within** in feet, check **Enable driver light**, then **Apply to Pi**. The chosen threshold is separate from audio settings. **Test light** flashes for two seconds, even when warnings are disabled, then returns to the configured behavior. Demo mode only previews the amber indicator and never sends light commands. To turn a physical light off, uncheck Enable and Apply while connected; changing to demo or closing the page does not disable the Pi controller.
+
+The Pi compares its own fresh ultrasonic distance against the applied threshold and flashes at 2 Hz (250 ms on / 250 ms off). It clears 5 cm past the selected threshold to avoid flicker near the boundary. Stale, invalid, saturated/no-exact-distance, or failed capture data turns the warning off and reports unavailable, rather than implying the area is clear. The configured 4 m sensor maximum still applies even though the UI allows 15 ft. Keep thresholds within the sensor's useful calibrated range. The local controller continues if the browser disconnects; settings are memory-only and reset to disabled on restart. The dashboard reports the last Pi status, not optical confirmation that an LED is lit.
+
+Authenticated light routes: `GET /api/light`, `POST /api/light` with `{"enabled":true,"threshold_m":0.9144}`, and `POST /api/light/test` with `{}`. POST requires the bearer key, JSON, and an allowed browser origin (or the Pi's own origin). Query-string keys cannot control the light. The UI connection key stays in memory.
