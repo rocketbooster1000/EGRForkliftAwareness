@@ -144,13 +144,13 @@ function drawDemos() {
     const w = canvas.width = 800, h = canvas.height = 470, c = canvas.getContext('2d');
     const van = { x: 400, y: 185 };
     const grad = c.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, '#344641'); grad.addColorStop(1, '#152522');
+    grad.addColorStop(0, '#26323a'); grad.addColorStop(1, '#11191f');
     c.fillStyle = grad; c.fillRect(0, 0, w, h);
     c.strokeStyle = '#7b928528'; c.lineWidth = 1;
     for (let x = -900; x < 1800; x += 100) { c.beginPath(); c.moveTo(van.x, van.y); c.lineTo(x, h); c.stroke(); }
     for (let y = 195; y < h; y += Math.max(14, (y - 150) * 0.22)) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
     for (const side of [0, 1]) {
-      c.fillStyle = side ? '#293c36' : '#304038'; c.beginPath(); c.moveTo(side ? 800 : 0, 0); c.lineTo(side ? 530 : 270, 130); c.lineTo(side ? 530 : 270, 280); c.lineTo(side ? 800 : 0, 470); c.fill();
+      c.fillStyle = side ? '#1d2930' : '#243139'; c.beginPath(); c.moveTo(side ? 800 : 0, 0); c.lineTo(side ? 530 : 270, 130); c.lineTo(side ? 530 : 270, 280); c.lineTo(side ? 800 : 0, 470); c.fill();
       c.strokeStyle = '#6f8d713b'; c.lineWidth = 4;
       for (let i = 0; i < 4; i++) { const x = side ? 800 - i * 85 : i * 85; c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h - i * 52); c.stroke(); }
       for (let j = 0; j < 3; j++) { c.beginPath(); c.moveTo(side ? 800 : 0, 85 + j * 105); c.lineTo(side ? 530 : 270, 145 + j * 49); c.stroke(); }
