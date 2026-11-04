@@ -1,16 +1,22 @@
-# Surround · Telehandler
+# Awarely.ai · Telehandler
 
 A camera and distance dashboard for the EGR 101 telehandler prototype. Four positions: **boom arm**, **rear**, **left**, and **right**. The one-camera layout shows the boom-arm camera. The plan-view telehandler has a telescopic boom, offset cab, fork attachment, and four wheels.
 
 ## Run locally
 
-On Windows, double-click **Start-Surround.cmd** to start the website. It also finds the bundled Node runtime on this computer. In VS Code, Ctrl+Shift+B runs the same launcher.
+On Windows, double-click **Start-Awarely.cmd** to start the website. It also finds the bundled Node runtime on this computer. In VS Code, Ctrl+Shift+B runs the same launcher.
 
 With Node.js 20 or newer installed, you can also run:
 
     npm start
 
-Open http://localhost:4317. No application dependencies are needed to run the dashboard. Stop with Ctrl+C. In VS Code, F5 opens the dashboard in Edge after the server has started.
+Open **http://awarely.localhost:4317** in Chrome or Edge. No application dependencies are needed to run the dashboard. Stop with Ctrl+C. In VS Code, F5 opens the dashboard in Edge after the server has started.
+
+## Named local address
+
+`awarely.localhost` is the local hostname; `4317` is the numeric port. A port cannot be called `awarely`. Chrome and Edge resolve `.localhost` names to this computer, so no hosts-file edit is needed. See [Microsoft’s localhost-name documentation](https://learn.microsoft.com/en-us/aspnet/core/test/localhost-tld).
+
+The original http://localhost:4317 address also serves the dashboard. Browsers store preferences and device permissions separately for each address; use that original address if you want to retain its saved settings. The `awarely.localhost` address is local to your computer and does not publish a public `awarely.ai` website.
 
 ## Distance-scaled audio
 

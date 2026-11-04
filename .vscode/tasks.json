@@ -1,12 +1,32 @@
 {
   "version": "2.0.0",
-  "tasks": [{
-    "label": "Start Surround",
-    "type": "shell",
-    "command": "node server.cjs", "windows": { "command": ".\\Start-Surround.cmd" },
-    "isBackground": true,
-    "problemMatcher": { "pattern": { "regexp": "^$" }, "background": { "activeOnStart": true, "beginsPattern": ".*", "endsPattern": "Surround running at.*" } },
-    "presentation": { "reveal": "always", "panel": "dedicated" },
-    "group": { "kind": "build", "isDefault": true }
-  }]
+  "tasks": [
+    {
+      "label": "Start Awarely.ai",
+      "type": "shell",
+      "command": "node server.cjs",
+      "windows": {
+        "command": ".\\Start-Awarely.cmd"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": "Awarely\\.ai running at.*"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
 }

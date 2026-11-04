@@ -1,10 +1,12 @@
 {
   "version": "0.2.0",
-  "configurations": [{
-    "name": "Open Surround (start server first)",
-    "type": "msedge",
-    "request": "launch",
-    "url": "http://localhost:4317",
-    "webRoot": "${workspaceFolder}"
-  }]
+  "configurations": [
+    {
+      "name": "Open Awarely.ai (start server first)",
+      "type": "msedge",
+      "request": "launch",
+      "url": "http://awarely.localhost:4317",
+      "webRoot": "${workspaceFolder}"
+    }
+  ]
 }

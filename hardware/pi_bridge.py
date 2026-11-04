@@ -300,7 +300,7 @@ def make_handler(state, site_root, token, allowed_origins=(), light=None):
 
 
 def parse_args(argv=None):
-    parser = argparse.ArgumentParser(description="Stream your DepthCamera API into the Surround website")
+    parser = argparse.ArgumentParser(description="Stream your DepthCamera API into the Awarely.ai website")
     parser.add_argument("--host", default="127.0.0.1", help="Default: local-only. Use a LAN address explicitly for laptop access")
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--sensor", choices=SENSOR_IDS, default="boom")
@@ -364,7 +364,7 @@ def main():
     server.daemon_threads = True
     worker = CaptureWorker(state, args)
     worker.start()
-    logging.info("Surround Pi bridge on %s:%s; connection key is in %s", args.host, args.port, args.token_file)
+    logging.info("Awarely.ai Pi bridge on %s:%s; connection key is in %s", args.host, args.port, args.token_file)
     try:
         server.serve_forever(poll_interval=.2)
     except KeyboardInterrupt:
@@ -380,4 +380,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

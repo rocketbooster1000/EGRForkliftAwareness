@@ -45,7 +45,7 @@ async function waitForServer() {
   await page.locator('#fullTone-all').fill('2');
   await page.locator('#sharedRanges').uncheck();
   await page.locator('#maxRange-boom').fill('10'); await page.locator('#fullTone-boom').fill('2');
-  assert.equal(await page.title(), 'Telehandler · Surround');
+  assert.equal(await page.title(), 'Awarely.ai · Telehandler');
   assert.equal(await page.locator('#camera-front').count(), 0);
   assert.equal(await page.locator('#sensorList input[type=range]').count(), 8);
   await page.locator('#single').click(); assert.equal(await page.locator('.camera:visible').count(), 1); assert.equal(await page.locator('#camera-boom').isVisible(), true);
@@ -190,4 +190,3 @@ async function waitForServer() {
   assert.deepEqual(errors, []);
   console.log('Browser checks passed: telehandler/boom layout; continuous pitch/rate and sustained audio; mute; two sliders and persistence; USB; multi-sensor fusion; moving boom; missing poses; stale/invalid readings; disconnect; demo recovery; authenticated Pi data/video; cm-to-ft display; detections; limit/no-data handling; frozen sequence expiry; mobile width.');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => { await browser?.close(); server.kill(); if (piFixture) await new Promise(resolve => piFixture.close(resolve)); });
-

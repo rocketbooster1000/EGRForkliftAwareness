@@ -17,7 +17,7 @@ From the cloned repository on your Pi:
 
 ```sh
 git pull
-python3 hardware/pi_bridge.py --host 0.0.0.0 --sensor boom --allow-origin http://localhost:4317 --allow-origin http://127.0.0.1:4317
+python3 hardware/pi_bridge.py --host 0.0.0.0 --sensor boom --allow-origin http://awarely.localhost:4317 --allow-origin http://localhost:4317 --allow-origin http://127.0.0.1:4317
 ```
 
 The default GPIO pins match your file: trigger BCM 17, echo BCM 18. Use `--sensor rear`, `--sensor left`, or `--sensor right` if that pair is mounted elsewhere. The bridge normally listens only on `127.0.0.1`; the explicit `--host` above enables laptop access on your local network. Every video and data request requires the connection key.
@@ -33,7 +33,7 @@ Keep the key on your devices. It is ignored by Git and never saved in browser st
 
 ## Connect the website
 
-1. Start the website on your laptop as usual and open http://localhost:4317. Alternatively, the Pi bridge also serves the dashboard at `http://PI-IP:8080`.
+1. Start the website on your laptop as usual and open http://awarely.localhost:4317. Alternatively, the Pi bridge also serves the dashboard at `http://PI-IP:8080`.
 2. Open **Connect devices**, then **Your Raspberry Pi setup**.
 3. Enter `http://PI-IP:8080` and paste the connection key.
 4. Click **Connect Pi**, then **Enable beeps**.
