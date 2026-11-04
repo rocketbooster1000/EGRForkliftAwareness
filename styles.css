@@ -43,8 +43,8 @@ header { padding-bottom: 23px; border-color: #ffffff0d; }
 h1 { font-size: 34px; font-weight: 650; letter-spacing: -1.8px; }
 h2 { font-size: clamp(25px, 2.3vw, 37px); font-weight: 560; letter-spacing: -1.4px; line-height: 1.15; }
 h3 { font-weight: 620; letter-spacing: -.2px; font-size: 14px; }
-.intro { padding: 30px 0 23px; }
-.intro p { margin-top: 9px; font-size: 13px; color: #a1afb6; }
+.intro { padding: 18px 0 20px; gap: 20px; }
+.intro .intro-description { margin: 0; max-width: 640px; font-size: 15px; line-height: 1.6; color: #a1afb6; }
 .header-actions { gap: 10px; }
 button { background: #1a242b; border-color: #35424b; border-radius: 10px; font-size: 12px; padding: 10px 15px; transition: background .15s, border-color .15s, box-shadow .15s; }
 button:hover { background: #26333c; border-color: #62747d; }
