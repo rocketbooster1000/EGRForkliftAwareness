@@ -80,9 +80,12 @@ function renderDriverLight() {
     status = ({ warning: 'Flashing warning', testing: 'Testing light', disabled: 'Light disabled', sensor_unavailable: 'No fresh sensor reading · light off', outside_range: 'Outside warning distance', output_error: 'LED output error' })[lightReported.reason] || 'Light status unknown';
     status += ' · Pi threshold ' + formatDistance(lightReported.threshold_m, 1);
   }
-  $('driverLight').classList.toggle('lit', !!lit);
-  $('driverLight').setAttribute('aria-label', demo ? 'Simulated warning light ' + (active ? 'flashing' : 'off') : 'Pi reports warning light ' + (active ? 'flashing' : 'off or unavailable'));
-  if ($('lightStatus').textContent !== status) $('lightStatus').textContent = status;
+  // The dashboard card, Settings preview, and Demo tab show the same light state.
+  const ledLabel = demo ? 'Simulated warning light ' + (active ? 'flashing' : 'off') : 'Pi reports warning light ' + (active ? 'flashing' : 'off or unavailable');
+  ['driverLight', 'driverLightPreview', 'driverLightDemo'].forEach(id => { $(id).classList.toggle('lit', !!lit); $(id).setAttribute('aria-label', ledLabel); });
+  ['lightStatus', 'lightStatusPreview', 'lightStatusDemo'].forEach(id => { if ($(id).textContent !== status) $(id).textContent = status; });
+  const summary = title($('lightSensor').value) + ' sensor · flashes within ' + feet.toFixed(1) + ' ft';
+  if ($('lightSummary').textContent !== summary) $('lightSummary').textContent = summary;
 }
 async function pollDriverLight() {
   const bridge = selectedLightBridge();

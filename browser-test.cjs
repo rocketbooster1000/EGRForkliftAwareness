@@ -23,11 +23,24 @@ async function waitForServer() {
   page.on('pageerror', e => errors.push(e.message));
   let bridge;
   await page.routeWebSocket(/.*/, ws => { bridge = ws; });
+  const tab = async view => { await page.locator(`.rail-link[data-view="${view}"]`).click(); await page.waitForFunction(v => !document.getElementById('view-' + v).hidden, view); };
   await page.goto(base);
   assert.equal(await page.locator('#maxRange-boom').getAttribute('max'), '15');
   assert.equal(await page.locator('#obstacle').getAttribute('max'), '15');
+  // The dashboard holds only cameras, map, warning light, and activity; settings and demo controls live on their own tabs.
+  for (const id of ['#cameraGrid', '#proximityMap', '#lightCard', '#log']) assert.equal(await page.locator(id).isVisible(), true, id);
+  for (const id of ['#fullTone-all', '#volume', '#lightSensor', '#applyLight', '#obstacle', '#demoSensor']) assert.equal(await page.locator(id).isVisible(), false, id);
+  assert.equal(await page.locator('.rail-link[data-view="dashboard"]').getAttribute('aria-current'), 'page');
+  await tab('settings');
+  assert.equal(page.url(), base + '/#settings');
+  for (const id of ['#fullTone-all', '#volume', '#lightSensor', '#applyLight', '#settingsMap svg']) assert.equal(await page.locator(id).isVisible(), true, id);
+  assert.equal(await page.locator('#cameraGrid').isVisible(), false);
+  await tab('demo');
+  for (const id of ['#obstacle', '#demoSensor', '#resetDemo', '#demoView', '#demoMap svg']) assert.equal(await page.locator(id).isVisible(), true, id);
   await page.evaluate(() => localStorage.setItem('surround-settings-v2', JSON.stringify({ boom: { maxRange: 10, fullTone: 1 } })));
+  await page.evaluate(() => { location.hash = 'settings'; });
   await page.reload();
+  assert.equal(await page.locator('#view-settings').isVisible(), true);
   assert.equal(await page.locator('#maxRange-boom').inputValue(), '15');
   assert.equal(await page.evaluate(() => sensors.boom.maxRange), 4.572);
   assert.equal(await page.locator('#maxRange-boom').isVisible(), false);
@@ -35,6 +48,11 @@ async function waitForServer() {
   await page.locator('#fullTone-all').fill('3');
   assert.equal(await page.evaluate(() => ids.every(id => Math.abs(sensors[id].fullTone - .9144) < 1e-9)), true);
   assert.match(await page.locator('#lightLinkedSummary').textContent(), /3.0 ft/);
+  // Range strips redraw from the same settings: 3 ft of the 15 ft scale is 20%.
+  await page.waitForFunction(() => Math.abs(parseFloat(document.getElementById('zoneTone-boom').style.width) - 20) < 1e-6);
+  assert.equal(await page.locator('#lightTick-boom').isVisible(), true);
+  assert.equal(await page.locator('#lightTick-rear').isVisible(), false);
+  assert.match(await page.locator('#lightSummary').textContent(), /Boom arm sensor · flashes within 3.0 ft/);
   await page.locator('#lightManual').check();
   await page.locator('#lightDistance').fill('5');
   await page.locator('#fullTone-all').fill('4');
@@ -48,9 +66,44 @@ async function waitForServer() {
   assert.equal(await page.title(), 'Awarely.ai · Telehandler');
   assert.equal(await page.locator('#camera-front').count(), 0);
   assert.equal(await page.locator('#sensorList input[type=range]').count(), 8);
+  // Settings preview: moving the test obstacle updates the Demo controls, the strip marker, and the preview map.
+  await page.locator('#previewSensor').selectOption('left');
+  await page.locator('#previewObstacle').fill('6');
+  assert.equal(await page.locator('#demoSensor').inputValue(), 'left');
+  assert.equal(await page.locator('#obstacleValue').textContent(), '6.00 ft');
+  await page.waitForFunction(() => Math.abs(parseFloat(document.getElementById('marker-left').style.left) - 40) < 1e-6);
+  assert.equal(await page.locator('#settingsMap circle[fill^="hsl"]').count(), await page.locator('#mapPoints circle').count());
+  // Dashboard popups summarize a panel and jump to its Settings section.
+  await tab('dashboard');
+  await page.locator('#camera-rear canvas').click();
+  assert.equal(await page.locator('#quick').isVisible(), true);
+  assert.equal(await page.locator('#quickTitle').textContent(), 'Rear');
+  assert.match(await page.locator('#quickDetails').innerText(), /Max range\s+10.0 ft/);
+  await page.locator('#quickGo').click();
+  assert.equal(await page.locator('#quick').isVisible(), false);
+  assert.equal(await page.locator('#view-settings').isVisible(), true);
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'sensor-rear');
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('#sensor-rear').evaluate(row => row.classList.contains('flash')), true);
+  await tab('dashboard');
+  await page.locator('#lightAdjust').click();
+  assert.equal(await page.locator('#quickTitle').textContent(), 'Warning light');
+  await page.locator('#quickGo').click();
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'settings-light');
+  await tab('dashboard');
+  await page.locator('#proximityMap').click();
+  assert.equal(await page.locator('#quickTitle').textContent(), 'Alert distances');
+  await page.getByRole('button', { name: 'Close settings summary' }).click();
+  await page.locator('#map-left').click();
+  assert.equal(await page.locator('#quickTitle').textContent(), 'Left');
+  await page.locator('#quickExtra').click();
+  assert.equal(await page.locator('#devices').isVisible(), true);
+  assert.equal(await page.locator('#quick').isVisible(), false);
+  await page.getByRole('button', { name: 'Close device setup' }).click();
   await page.locator('#single').click(); assert.equal(await page.locator('.camera:visible').count(), 1); assert.equal(await page.locator('#camera-boom').isVisible(), true);
   await page.locator('#multi').click(); assert.equal(await page.locator('.camera:visible').count(), 4);
   // Verify rendered camera size, displayed distance, and metric map agree on every side.
+  await tab('demo');
   for (const id of ['boom', 'rear', 'left', 'right']) {
     await page.locator('#demoSensor').selectOption(id);
     await page.locator('#obstacle').fill('15');
@@ -103,6 +156,7 @@ async function waitForServer() {
     return { active: await render(false), muted: await render(true) };
   });
   assert.ok(renderedAudio.active > 0.01); assert.ok(renderedAudio.muted < 0.00001);
+  await tab('settings');
   await page.locator('#maxRange-rear').fill('4'); await page.locator('#fullTone-rear').fill('1');
   await page.reload(); assert.equal(await page.locator('#maxRange-rear').inputValue(), '4'); assert.equal(await page.locator('#fullTone-rear').inputValue(), '1');
   await page.locator('#maxRange-rear').fill('1'); assert.ok(Number(await page.locator('#fullTone-rear').inputValue()) < 1);
@@ -183,10 +237,14 @@ async function waitForServer() {
   await page.locator('#disconnectSensors').click(); await page.getByRole('button', { name: 'Close device setup' }).click();
   await page.locator('#maxRange-rear').fill('10'); await page.locator('#fullTone-rear').fill('2');
   const results = path.join(__dirname, 'test-results'); await fs.mkdir(results, { recursive: true });
-  await page.screenshot({ path: path.join(results, 'dashboard-desktop.png'), fullPage: true });
+  for (const view of ['dashboard', 'settings', 'demo']) { await tab(view); await page.screenshot({ path: path.join(results, view + '-desktop.png'), fullPage: true }); }
   await page.setViewportSize({ width: 390, height: 844 });
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-  await page.screenshot({ path: path.join(results, 'dashboard-mobile.png'), fullPage: true });
+  // On phones the tab rail becomes a bottom bar; no tab may scroll sideways.
+  for (const view of ['dashboard', 'settings', 'demo']) {
+    await tab(view);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, view);
+    await page.screenshot({ path: path.join(results, view + '-mobile.png'), fullPage: true });
+  }
   assert.deepEqual(errors, []);
-  console.log('Browser checks passed: telehandler/boom layout; continuous pitch/rate and sustained audio; mute; two sliders and persistence; USB; multi-sensor fusion; moving boom; missing poses; stale/invalid readings; disconnect; demo recovery; authenticated Pi data/video; cm-to-ft display; detections; limit/no-data handling; frozen sequence expiry; mobile width.');
+  console.log('Browser checks passed: dashboard/settings/demo tabs; popups to settings; range strips and preview maps; telehandler/boom layout; continuous pitch/rate and sustained audio; mute; two sliders and persistence; USB; multi-sensor fusion; moving boom; missing poses; stale/invalid readings; disconnect; demo recovery; authenticated Pi data/video; cm-to-ft display; detections; limit/no-data handling; frozen sequence expiry; mobile width.');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => { await browser?.close(); server.kill(); if (piFixture) await new Promise(resolve => piFixture.close(resolve)); });

@@ -2,6 +2,12 @@
 
 A camera and distance dashboard for the EGR 101 telehandler prototype. Four positions: **boom arm**, **rear**, **left**, and **right**. The one-camera layout shows the boom-arm camera. The plan-view telehandler has a telescopic boom, offset cab, fork attachment, and four wheels.
 
+The left rail has three tabs:
+
+- **Dashboard** — camera feeds, the proximity map, the warning light, and activity. Click a camera, map reading, the map, or the warning light (or its gear icon) for a short summary and a shortcut to its settings.
+- **Settings** — proximity distances, alert sound, and the warning light, with a live preview (map, sound, light, and a test obstacle) beside them.
+- **Demo** — simulated obstacles for each side, with the matching camera view and map.
+
 ## Run locally
 
 On Windows, double-click **Start-Awarely.cmd** to start the website. It also finds the bundled Node runtime on this computer. In VS Code, Ctrl+Shift+B runs the same launcher.
@@ -29,7 +35,7 @@ Each sensor has two sliders:
 
 Between those distances, pitch rises continuously through a low, compact 240–480 Hz range, the pulse period falls from 1.2 seconds to 0.12 seconds, and pulse duty rises from 10% to 95%. The final 2% of the curve transitions to a sustained tone. At or below Full tone at, sound stays at the high end. Outside Max range, that sensor is silent.
 
-The most urgent normalized sensor controls one tone so multiple views do not produce overlapping beeps. Volume is separate. Click Enable beeps to allow browser audio, then use Try a scenario to move an obstacle on any side. Each simulated camera uses that same sensor distance: the obstacle grows as it gets closer and shrinks as it moves away. A shared 0.8 m obstacle width drives both its camera projection and map returns. Settings are saved in this browser; version-one front settings migrate to boom settings.
+The most urgent normalized sensor controls one tone so multiple views do not produce overlapping beeps. Volume is separate. Click Enable beeps to allow browser audio, then use the **Demo** tab to move an obstacle on any side. Each simulated camera uses that same sensor distance: the obstacle grows as it gets closer and shrinks as it moves away. A shared 0.8 m obstacle width drives both its camera projection and map returns. Settings are saved in this browser; version-one front settings migrate to boom settings.
 
 ## Connect your Pi camera and ultrasonic API
 
@@ -66,6 +72,6 @@ This classroom prototype plays alerts in the browser. The supplied Picamera2/ult
 
 ## Driver warning light
 
-The dashboard includes a separate **Driver warning light** panel with a sensor selector, adjustable distance in feet, enable/apply controls, a two-second test, and Pi-reported status. In demo mode it previews an amber indicator only. With the optional Pi LED configured, the Pi handles flashing locally even when the browser closes. See [LED wiring and setup](docs/pi-setup.md#driver-facing-amber-warning-led). Physical wiring and output still require testing on the actual Pi.
+The dashboard shows the **Warning light** status; its sensor selector, adjustable distance in feet, enable/apply controls, and two-second test are under **Settings → Warning light**, next to the Pi-reported status. In demo mode it previews an amber indicator only. With the optional Pi LED configured, the Pi handles flashing locally even when the browser closes. See [LED wiring and setup](docs/pi-setup.md#driver-facing-amber-warning-led). Physical wiring and output still require testing on the actual Pi.
 
 Distance controls default to one shared Max range / Full tone at pair for all four sides. Turn off **Use the same distances for all sides** to adjust each side separately. The driver light follows its selected sensor’s Full tone at by default; **Set light distance manually** reveals its independent slider. Physical light changes still require **Apply to Pi**.

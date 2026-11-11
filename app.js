@@ -4,6 +4,7 @@ const L = SurroundLogic, ids = L.IDS;
 const formatDistance = (meters, digits = 2) => L.metersToFeet(meters).toFixed(digits) + ' ft';
 const title = id => id === 'boom' ? 'Boom arm' : id.charAt(0).toUpperCase() + id.slice(1);
 const demoDistances = [3.2, 1.4, 2.8, 4.1];
+const GEAR_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="8.4" stroke-width="3" stroke-dasharray="3.3 3.3"/><circle cx="12" cy="12" r="6.2" stroke-width="1.8"/><circle cx="12" cy="12" r="2.3" stroke-width="1.8"/></svg>';
 let stored = {};
 try { stored = JSON.parse(localStorage.getItem('surround-settings-v2') || localStorage.getItem('surround-settings') || '{}') || {}; } catch {}
 const sensors = Object.fromEntries(ids.map((id, i) => {
@@ -48,7 +49,8 @@ function log(message, level = 'clear') {
   while ($('log').children.length > 35) $('log').lastChild.remove();
 }
 function buildSensors() {
-  $('sensorList').innerHTML = ids.map(id => `<div class="sensor" id="sensor-${id}"><div class="sensor-head"><span class="sensor-name">${title(id)} sensor</span><span class="reading" id="reading-${id}">—</span></div><div class="sensor-status" id="status-${id}"></div><p class="hardware-meta" id="hardware-${id}" hidden></p><div id="ranges-${id}" class="sensor-range-controls"><label class="range-label" for="maxRange-${id}">Max range <output id="maxRangeValue-${id}"></output></label><input type="range" id="maxRange-${id}" min="1" max="15" step="0.1" value="${L.metersToFeet(sensors[id].maxRange).toFixed(1)}"><label class="range-label" for="fullTone-${id}">Full tone at <output id="fullToneValue-${id}"></output></label><input class="critical-range" type="range" id="fullTone-${id}" min="0.1" max="14.9" step="0.1" value="${L.metersToFeet(sensors[id].fullTone).toFixed(1)}"></div><div class="urgency-track"><span id="urgency-${id}"></span></div></div>`).join('');
+  // Each row shows its zones on a 0–15 ft strip, so range changes are visible immediately.
+  $('sensorList').innerHTML = ids.map(id => `<div class="sensor" id="sensor-${id}" tabindex="-1"><div class="sensor-head"><span class="sensor-name">${title(id)} sensor</span><span class="reading" id="reading-${id}">—</span></div><div class="sensor-status" id="status-${id}"></div><p class="hardware-meta" id="hardware-${id}" hidden></p><div class="range-strip" aria-hidden="true"><span class="zone tone" id="zoneTone-${id}"></span><span class="zone beep" id="zoneBeep-${id}"></span><i class="strip-light" id="lightTick-${id}" hidden></i><i class="strip-marker" id="marker-${id}" hidden></i></div><div class="strip-scale" aria-hidden="true"><span>0</span><span>5</span><span>10</span><span>15 ft</span></div><div id="ranges-${id}" class="sensor-range-controls range-pair"><div><label class="range-label" for="maxRange-${id}">Max range <output id="maxRangeValue-${id}"></output></label><input type="range" id="maxRange-${id}" min="1" max="15" step="0.1" value="${L.metersToFeet(sensors[id].maxRange).toFixed(1)}"></div><div><label class="range-label" for="fullTone-${id}">Full tone at <output id="fullToneValue-${id}"></output></label><input class="critical-range" type="range" id="fullTone-${id}" min="0.1" max="14.9" step="0.1" value="${L.metersToFeet(sensors[id].fullTone).toFixed(1)}"></div></div></div>`).join('');
   ids.forEach(id => ['maxRange', 'fullTone'].forEach(key => $(`${key}-${id}`).addEventListener('input', e => {
     if (sharedRanges) return;
     applyDistanceSettings(sensors[id], key, Number($('maxRange-' + id).value), Number($('fullTone-' + id).value));
@@ -65,7 +67,8 @@ function buildSensors() {
     distanceSettingsChanged();
   });
   syncRangeControls();
-  $('mapReadouts').innerHTML = ids.map(id => `<div id="map-${id}" class="map-readout"><span>${title(id)}</span><strong>—</strong></div>`).join('');
+  $('mapReadouts').innerHTML = ids.map(id => `<button type="button" id="map-${id}" class="map-readout" title="${title(id)} sensor settings"><span>${title(id)}</span><strong>—</strong></button>`).join('');
+  ids.forEach(id => $('map-' + id).onclick = event => { event.stopPropagation(); openQuick('sensor', id); });
 }
 function demoPoints(distance) { return L.demoScan(distance); }
 function renderSensors() {
@@ -79,7 +82,8 @@ function renderSensors() {
     if (s.status !== next) {
       log(`${title(id)}: ${{ stale: 'no fresh sensor data', clear: 'outside alert range', approaching: 'distance-scaled beeps', close: 'full tone' }[next]}${mode === 'demo' ? ' (demo)' : ''}.`, next); s.status = next;
     }
-    $(`sensor-${id}`).className = 'sensor ' + next;
+    // Toggle only state classes so the Settings highlight (flash) is not wiped every frame.
+    ['stale', 'clear', 'approaching', 'close'].forEach(state => $(`sensor-${id}`).classList.toggle(state, state === next));
     $(`reading-${id}`).innerHTML = next === 'stale' ? '— <small>ft</small>' : `${L.metersToFeet(s.distance).toFixed(2)} <small>ft</small>`;
     $(`status-${id}`).textContent = (mode === 'demo' ? 'SIMULATED · ' : 'LIVE · ') + ({ clear: 'OUTSIDE ALERT RANGE', approaching: 'INTENSITY ' + Math.round(profile.progress * 100) + '%', close: 'FULL TONE', stale: 'NO FRESH DATA' }[next]);
     const hardware = s.hardware, hardwareFresh = hardware && now - hardware.updated < L.STALE_MS;
@@ -88,23 +92,42 @@ function renderSensors() {
       metadata.textContent = 'Ultrasonic · limit ' + formatDistance(hardware.maxRange) + ' · ' + (hardware.people === null ? 'people detection unavailable' : hardware.people + ' people detected') + (hardware.newObject ? ' · NEW OBJECT' : '');
       if (hardware.rangeStatus === 'at_limit') $('status-' + id).textContent = 'LIVE · AT SENSOR LIMIT / NO EXACT DISTANCE';
     } else if (hardware) metadata.textContent = 'Hardware feed unavailable';
+    // Keep Pi detections visible on the dashboard camera card as well.
+    const note = cameras[id].piBase && $('camera-' + id).querySelector('.cam-note');
+    if (note) note.textContent = hardwareFresh ? (hardware.people === null ? 'People detection unavailable' : hardware.people + ' people detected') + (hardware.newObject ? ' · NEW OBJECT' : '') : 'Camera + calibrated ultrasonic sensor';
     ['maxRange', 'fullTone'].forEach(key => $(`${key}Value-${id}`).textContent = formatDistance(s[key], 1));
-    $(`urgency-${id}`).style.width = (profile.progress * 100) + '%';
+    renderRangeStrip(id, next);
     $(`map-${id}`).className = 'map-readout ' + next;
     $(`map-${id}`).querySelector('strong').textContent = next === 'stale' ? 'No data' : formatDistance(s.distance);
     if (profile.active && (!winner || profile.progress > winner.progress)) winner = { ...profile, sensor: id };
   });
   audio.setProfile(soundOn ? winner : null);
-  $('audioSummary').textContent = winner ? `${title(winner.sensor)} · ${Math.round(winner.frequencyHz)} Hz · ${winner.continuous ? 'sustained tone' : (1 / winner.periodSeconds).toFixed(1) + ' beeps / sec'}${soundOn ? '' : ' · muted'}` : 'No fresh readings inside an alert range.';
+  const soundText = winner ? `${title(winner.sensor)} · ${Math.round(winner.frequencyHz)} Hz · ${winner.continuous ? 'sustained tone' : (1 / winner.periodSeconds).toFixed(1) + ' beeps / sec'}${soundOn ? '' : ' · muted'}` : 'No fresh readings inside an alert range.';
+  ['audioSummary', 'audioSummaryDemo'].forEach(target => { if ($(target).textContent !== soundText) $(target).textContent = soundText; });
   renderMap(now);
   drawDemos();
+  renderDemoStatus();
+  if ($('quick').open) renderQuick();
+}
+const STRIP_METERS = L.feetToMeters(L.MAX_RANGE_FT);
+const stripPercent = meters => Math.max(0, Math.min(100, meters / STRIP_METERS * 100)) + '%';
+function renderRangeStrip(id, state) {
+  const s = sensors[id];
+  $('zoneTone-' + id).style.width = stripPercent(s.fullTone);
+  const beep = $('zoneBeep-' + id);
+  beep.style.left = stripPercent(s.fullTone); beep.style.width = stripPercent(s.maxRange - s.fullTone);
+  const marker = $('marker-' + id);
+  marker.hidden = state === 'stale';
+  if (!marker.hidden) { marker.style.left = stripPercent(s.distance); marker.className = 'strip-marker ' + state; }
+  // light.js loads after this file; the tick appears once it is ready.
+  const tick = $('lightTick-' + id), lightReady = typeof lightThresholdMeters === 'function';
+  tick.hidden = !lightReady || $('lightSensor').value !== id;
+  if (!tick.hidden) { tick.style.left = stripPercent(lightThresholdMeters()); tick.classList.toggle('off', !$('lightEnabled').checked); }
 }
 function renderMap(now) {
   const fused = L.fuseReadings(sensors, now);
   const extent = Math.max(8, ...fused.points.flatMap(p => [Math.abs(p.x_m) + 1, Math.abs(p.y_m) + 1]));
   const bounds = [-extent, -extent, extent * 2, extent * 2];
-  $('proximityMap').setAttribute('viewBox', bounds.join(' '));
-  ['x', 'y', 'width', 'height'].forEach((key, i) => $('gridBackground').setAttribute(key, bounds[i]));
   const rays = [], mounts = [];
   ids.forEach(id => {
     const s = sensors[id]; if (now - s.updated >= L.STALE_MS || !s.pose || !Number.isFinite(s.distance)) return;
@@ -115,16 +138,39 @@ function renderMap(now) {
       rays.push(`<line x1="${p.x_m}" y1="${-p.y_m}" x2="${point.x_m}" y2="${-point.y_m}" stroke="#a6c18c" opacity=".17" stroke-width=".025"/>`);
     });
   });
-  $('mapRays').innerHTML = rays.join(''); $('mapSensors').innerHTML = mounts.join('');
-  $('mapPoints').innerHTML = fused.points.map(p => `<circle data-sources="${p.sources.join(',')}" cx="${p.x_m}" cy="${-p.y_m}" r="${p.sources.length > 1 ? '.15' : '.11'}" fill="hsl(${95 - p.urgency * 85} 70% 68%)" stroke="#17221a" stroke-width=".035"><title>${p.sources.map(title).join(' + ')} · ${L.metersToFeet(p.x_m).toFixed(2)}, ${L.metersToFeet(p.y_m).toFixed(2)} ft · ${p.count} returns</title></circle>`).join('');
+  const points = fused.points.map(p => `<circle cx="${p.x_m}" cy="${-p.y_m}" r="${p.sources.length > 1 ? '.15' : '.11'}" fill="hsl(${95 - p.urgency * 85} 70% 68%)" stroke="#17221a" stroke-width=".035"><title>${p.sources.map(title).join(' + ')} · ${L.metersToFeet(p.x_m).toFixed(2)}, ${L.metersToFeet(p.y_m).toFixed(2)} ft · ${p.count} returns</title></circle>`);
+  mapTargets.forEach(target => {
+    target.svg.setAttribute('viewBox', bounds.join(' '));
+    ['x', 'y', 'width', 'height'].forEach((key, i) => target.grid.setAttribute(key, bounds[i]));
+    target.rays.innerHTML = rays.join(''); target.sensors.innerHTML = mounts.join('');
+    // Only the dashboard map carries source IDs, so lookups by data-sources stay unambiguous.
+    target.points.innerHTML = target.main ? points.map((markup, i) => markup.replace('<circle ', `<circle data-sources="${fused.points[i].sources.join(',')}" `)).join('') : points.join('');
+  });
   $('mapBadge').textContent = mode === 'demo' ? 'DEMO GEOMETRY' : fused.unplaced.length ? 'NEEDS SENSOR POSES' : 'LIVE COORDINATES';
   $('mapSummary').textContent = `${fused.freshSensors}/4 fresh sensors · ${fused.points.length} combined points${fused.unplaced.length ? ' · Unplaced: ' + fused.unplaced.map(title).join(', ') : ''}${mode === 'demo' ? ' · demo mounts and distances' : ''}`;
 }
+// The dashboard map plus read-only copies shown as previews on the Settings and Demo tabs.
+const mapTargets = [{ main: true, svg: $('proximityMap'), grid: $('gridBackground'), rays: $('mapRays'), sensors: $('mapSensors'), points: $('mapPoints') }];
+function addMapPreview(containerId) {
+  const prefix = containerId + '-', svg = $('proximityMap').cloneNode(true);
+  svg.removeAttribute('id'); svg.removeAttribute('aria-labelledby'); svg.setAttribute('aria-label', 'Proximity map preview');
+  svg.querySelectorAll('title[id], desc[id]').forEach(node => node.remove());
+  svg.querySelectorAll('[id]').forEach(node => node.id = prefix + node.id);
+  const part = name => svg.querySelector('#' + prefix + name);
+  part('gridBackground').setAttribute('fill', `url(#${prefix}grid)`);
+  $(containerId).append(svg);
+  mapTargets.push({ svg, grid: part('gridBackground'), rays: part('mapRays'), sensors: part('mapSensors'), points: part('mapPoints') });
+}
 function cameraElement(id){
  const card=document.createElement('article');card.className='camera';card.id='camera-'+id;
- card.innerHTML=`<canvas aria-label="Illustrated demo view, not a live camera feed"></canvas><div class="cam-top"><span class="cam-label">${title(id).toUpperCase()} <span style="opacity:.5">/ 0${ids.indexOf(id)+1}</span></span><span class="cam-status">ILLUSTRATED DEMO</span></div><div class="cam-bottom"><span class="cam-note">No camera connected</span><button type="button">Connect camera ↗</button></div>`;
- card.querySelector('button').onclick=()=>{$('devices').showModal();$(`source-${id}`).focus();};return card;
+ card.innerHTML=`<canvas aria-label="Illustrated demo view, not a live camera feed"></canvas><div class="cam-top"><span class="cam-label">${title(id).toUpperCase()} <span style="opacity:.5">/ 0${ids.indexOf(id)+1}</span></span><span class="cam-top-right"><span class="cam-status">ILLUSTRATED DEMO</span><button type="button" class="adjust-button cam-adjust" aria-label="${title(id)} sensor settings">${GEAR_ICON}</button></span></div><div class="cam-bottom"><span class="cam-note">No camera connected</span><button type="button" class="cam-connect">Connect camera ↗</button></div>`;
+ card.querySelector('.cam-connect').onclick=()=>openDevices(id);
+ card.querySelector('.cam-adjust').onclick=()=>openQuick('sensor',id);
+ // Clicking the picture opens the same summary; video controls and buttons keep their own behavior.
+ card.addEventListener('click',event=>{if(!event.target.closest('button, a, video, input, select'))openQuick('sensor',id);});
+ return card;
 }
+function openDevices(id){$('quick').close();$('devices').showModal();if(id)$(`source-${id}`).focus();}
 function renderCameras(){
  const grid=$('cameraGrid');
  // Keep live video elements and MediaStreams mounted when changing layouts.
@@ -134,51 +180,54 @@ function renderCameras(){
  requestAnimationFrame(drawDemos);
 }
 function drawDemos() {
-  ids.forEach((id, index) => {
+  ids.forEach(id => {
     const card = $('camera-' + id), canvas = card.querySelector('canvas');
-    if (!canvas || card.hidden) return;
-    const simulated = mode === 'demo', distance = sensors[id].distance;
-    const key = simulated + ':' + distance;
-    if (canvas.dataset.renderKey === key) return;
-    canvas.dataset.renderKey = key;
-    const w = canvas.width = 800, h = canvas.height = 470, c = canvas.getContext('2d');
-    const van = { x: 400, y: 185 };
-    const grad = c.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, '#26323a'); grad.addColorStop(1, '#11191f');
-    c.fillStyle = grad; c.fillRect(0, 0, w, h);
-    c.strokeStyle = '#7b928528'; c.lineWidth = 1;
-    for (let x = -900; x < 1800; x += 100) { c.beginPath(); c.moveTo(van.x, van.y); c.lineTo(x, h); c.stroke(); }
-    for (let y = 195; y < h; y += Math.max(14, (y - 150) * 0.22)) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
-    for (const side of [0, 1]) {
-      c.fillStyle = side ? '#1d2930' : '#243139'; c.beginPath(); c.moveTo(side ? 800 : 0, 0); c.lineTo(side ? 530 : 270, 130); c.lineTo(side ? 530 : 270, 280); c.lineTo(side ? 800 : 0, 470); c.fill();
-      c.strokeStyle = '#6f8d713b'; c.lineWidth = 4;
-      for (let i = 0; i < 4; i++) { const x = side ? 800 - i * 85 : i * 85; c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h - i * 52); c.stroke(); }
-      for (let j = 0; j < 3; j++) { c.beginPath(); c.moveTo(side ? 800 : 0, 85 + j * 105); c.lineTo(side ? 530 : 270, 145 + j * 49); c.stroke(); }
-    }
-    c.strokeStyle = '#d3df9d66'; c.lineWidth = 3; c.beginPath(); c.moveTo(195, h); c.lineTo(350, 225); c.moveTo(605, h); c.lineTo(450, 225); c.stroke();
-    if (simulated) {
-      // One fixed-size obstacle, projected using the same metric distance/width as the map scan.
-      const depth = Math.max(0.05, distance), focal = 335;
-      const width = focal * L.DEMO_OBSTACLE.width_m / depth;
-      const height = focal * L.DEMO_OBSTACLE.height_m / depth;
-      const bottom = van.y + focal * L.DEMO_OBSTACLE.camera_height_m / depth;
-      const left = van.x - width / 2, top = bottom - height;
-      c.fillStyle = '#7f8c6d'; c.fillRect(left, top, width, height);
-      c.fillStyle = '#9aa886'; c.fillRect(left, top, Math.min(6, width * 0.07), height);
-      c.strokeStyle = '#d0dda4'; c.lineWidth = 2; c.strokeRect(left - 5, top - 5, width + 10, height + 10);
-      const labelY = Math.max(85, Math.min(345, top - 20));
-      c.font = '600 16px Segoe UI'; c.textAlign = 'center';
-      const label = 'SIMULATED · ' + formatDistance(distance);
-      const labelWidth = c.measureText(label).width;
-      c.fillStyle = '#101b16eb'; c.fillRect(van.x - labelWidth / 2 - 10, labelY - 18, labelWidth + 20, 26);
-      c.fillStyle = '#dfebc7'; c.fillText(label, van.x, labelY);
-      canvas.setAttribute('aria-label', title(id) + ' simulated view: obstacle ' + L.metersToFeet(distance).toFixed(2) + ' feet away');
-    } else {
-      canvas.setAttribute('aria-label', title(id) + ' camera placeholder. No simulated obstacle in live sensor mode.');
-    }
-    c.fillStyle = '#d4e2d166'; c.font = '12px Segoe UI'; c.textAlign = 'center';
-    c.fillText('ILLUSTRATED CAMERA PLACEHOLDER', 400, 402);
+    if (canvas && !card.hidden) drawScene(canvas, id);
   });
+  drawScene($('demoView'), $('demoSensor').value);
+}
+function drawScene(canvas, id) {
+  const simulated = mode === 'demo', distance = sensors[id].distance;
+  const key = id + ':' + simulated + ':' + distance;
+  if (canvas.dataset.renderKey === key) return;
+  canvas.dataset.renderKey = key;
+  const w = canvas.width = 800, h = canvas.height = 470, c = canvas.getContext('2d');
+  const van = { x: 400, y: 185 };
+  const grad = c.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, '#26323a'); grad.addColorStop(1, '#11191f');
+  c.fillStyle = grad; c.fillRect(0, 0, w, h);
+  c.strokeStyle = '#7b928528'; c.lineWidth = 1;
+  for (let x = -900; x < 1800; x += 100) { c.beginPath(); c.moveTo(van.x, van.y); c.lineTo(x, h); c.stroke(); }
+  for (let y = 195; y < h; y += Math.max(14, (y - 150) * 0.22)) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+  for (const side of [0, 1]) {
+    c.fillStyle = side ? '#1d2930' : '#243139'; c.beginPath(); c.moveTo(side ? 800 : 0, 0); c.lineTo(side ? 530 : 270, 130); c.lineTo(side ? 530 : 270, 280); c.lineTo(side ? 800 : 0, 470); c.fill();
+    c.strokeStyle = '#6f8d713b'; c.lineWidth = 4;
+    for (let i = 0; i < 4; i++) { const x = side ? 800 - i * 85 : i * 85; c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h - i * 52); c.stroke(); }
+    for (let j = 0; j < 3; j++) { c.beginPath(); c.moveTo(side ? 800 : 0, 85 + j * 105); c.lineTo(side ? 530 : 270, 145 + j * 49); c.stroke(); }
+  }
+  c.strokeStyle = '#d3df9d66'; c.lineWidth = 3; c.beginPath(); c.moveTo(195, h); c.lineTo(350, 225); c.moveTo(605, h); c.lineTo(450, 225); c.stroke();
+  if (simulated) {
+    // One fixed-size obstacle, projected using the same metric distance/width as the map scan.
+    const depth = Math.max(0.05, distance), focal = 335;
+    const width = focal * L.DEMO_OBSTACLE.width_m / depth;
+    const height = focal * L.DEMO_OBSTACLE.height_m / depth;
+    const bottom = van.y + focal * L.DEMO_OBSTACLE.camera_height_m / depth;
+    const left = van.x - width / 2, top = bottom - height;
+    c.fillStyle = '#7f8c6d'; c.fillRect(left, top, width, height);
+    c.fillStyle = '#9aa886'; c.fillRect(left, top, Math.min(6, width * 0.07), height);
+    c.strokeStyle = '#d0dda4'; c.lineWidth = 2; c.strokeRect(left - 5, top - 5, width + 10, height + 10);
+    const labelY = Math.max(85, Math.min(345, top - 20));
+    c.font = '600 16px Segoe UI'; c.textAlign = 'center';
+    const label = 'SIMULATED · ' + formatDistance(distance);
+    const labelWidth = c.measureText(label).width;
+    c.fillStyle = '#101b16eb'; c.fillRect(van.x - labelWidth / 2 - 10, labelY - 18, labelWidth + 20, 26);
+    c.fillStyle = '#dfebc7'; c.fillText(label, van.x, labelY);
+    canvas.setAttribute('aria-label', title(id) + ' simulated view: obstacle ' + L.metersToFeet(distance).toFixed(2) + ' feet away');
+  } else {
+    canvas.setAttribute('aria-label', title(id) + ' camera placeholder. No simulated obstacle in live sensor mode.');
+  }
+  c.fillStyle = '#d4e2d166'; c.font = '12px Segoe UI'; c.textAlign = 'center';
+  c.fillText('ILLUSTRATED CAMERA PLACEHOLDER', 400, 402);
 }
 
 function updateCameraCount(){$('cameraCount').textContent=ids.filter(id=>cameras[id].kind==='live').length+' connected';}
@@ -237,19 +286,120 @@ $('audio').onclick = async () => {
 $('testSound').onclick = () => audio.test().catch(error => log(error.message, 'approaching'));
 $('volume').oninput = e => { audio.volume = Number(e.target.value) / 100; $('volumeValue').textContent = e.target.value + '%'; };
 $('single').onclick = () => { layout = 1; save(); renderCameras(); }; $('multi').onclick = () => { layout = 4; save(); renderCameras(); };
-$('settingsButton').onclick = () => $('devices').showModal(); $('clearLog').onclick = () => $('log').replaceChildren();
-function syncDemoControl() { const value = sensors[$('demoSensor').value].distance; $('obstacle').value = L.metersToFeet(value); $('obstacleValue').textContent = formatDistance(value); }
-$('demoSensor').onchange = syncDemoControl;
-$('obstacle').oninput = e => { if (mode !== 'demo') return; sensors[$('demoSensor').value].distance = L.feetToMeters(Number(e.target.value)); syncDemoControl(); renderSensors(); };
+$('settingsButton').onclick = () => openDevices(); $('clearLog').onclick = () => $('log').replaceChildren();
+// The Demo tab and the Settings preview share one simulated obstacle per side.
+const demoControls = [['demoSensor', 'obstacle', 'obstacleValue'], ['previewSensor', 'previewObstacle', 'previewObstacleValue']];
+function syncDemoControl() {
+  const id = $('demoSensor').value, value = sensors[id].distance;
+  demoControls.forEach(([select, slider, output]) => {
+    $(select).value = id;
+    if (Number.isFinite(value)) $(slider).value = L.metersToFeet(value);
+    $(output).textContent = Number.isFinite(value) ? formatDistance(value) : '— ft';
+  });
+}
+demoControls.forEach(([select, slider]) => {
+  $(select).onchange = () => { $('demoSensor').value = $(select).value; syncDemoControl(); drawDemos(); renderDemoStatus(); };
+  $(slider).oninput = e => { if (mode !== 'demo') return; sensors[$('demoSensor').value].distance = L.feetToMeters(Number(e.target.value)); syncDemoControl(); renderSensors(); };
+});
+function renderDemoStatus() {
+  const id = $('demoSensor').value, s = sensors[id];
+  const heading = title(id) + ' camera';
+  const text = mode === 'demo' ? `${title(id)} obstacle at ${formatDistance(s.distance)} · ${STATE_TEXT[s.status] || ''}` : 'Live sensor mode. Simulated obstacles are off.';
+  if ($('demoViewTitle').textContent !== heading) $('demoViewTitle').textContent = heading;
+  if ($('demoViewStatus').textContent !== text) $('demoViewStatus').textContent = text;
+}
 function resetDemo() {
   ids.forEach((id, i) => Object.assign(sensors[id], { distance: demoDistances[i], updated: Date.now(), pose: L.DEMO_POSES[id], points: demoPoints(demoDistances[i]), hardware: null })); syncDemoControl(); renderSensors();
 }
 $('resetDemo').onclick = () => { if (mode === 'demo') resetDemo(); };
 function setMode(next) {
-  mode = next; $('modeBadge').textContent = next === 'demo' ? '● DEMO MODE' : '● LIVE SENSOR MODE';
-  ['obstacle', 'demoSensor', 'resetDemo'].forEach(id => $(id).disabled = next !== 'demo');
-  $('footerStatus').textContent = (next === 'demo' ? '4 simulated sensors' : 'Live sensor input · stale after 3 seconds') + ' · settings saved on this browser';
+  mode = next; const demo = next === 'demo';
+  $('modeBadge').textContent = demo ? '● DEMO MODE' : '● LIVE SENSOR MODE';
+  ['obstacle', 'demoSensor', 'resetDemo', 'previewSensor', 'previewObstacle'].forEach(id => $(id).disabled = !demo);
+  $('previewMode').textContent = demo ? 'DEMO' : 'LIVE';
+  $('previewModeNote').textContent = demo ? 'Move a simulated obstacle to hear and see your settings.' : 'Showing live readings. Test distance works in demo mode.';
+  $('demoModeNote').hidden = demo;
+  $('demoModeNote').textContent = demo ? '' : 'Live sensors are connected. Choose Use demo in Connect devices to return to simulation.';
+  $('footerStatus').textContent = (demo ? '4 simulated sensors' : 'Live sensor input · stale after 3 seconds') + ' · settings saved on this browser';
 }
+
+// Tabs: Dashboard, Settings, Demo. The URL hash keeps the selected tab on reload.
+const VIEWS = ['dashboard', 'settings', 'demo'];
+let activeView = null;
+function showView(view) {
+  if (!VIEWS.includes(view)) view = 'dashboard';
+  const changed = view !== activeView; activeView = view;
+  VIEWS.forEach(v => $('view-' + v).hidden = v !== view);
+  document.querySelectorAll('.rail-link').forEach(link => link.dataset.view === view ? link.setAttribute('aria-current', 'page') : link.removeAttribute('aria-current'));
+  if (changed) { window.scrollTo(0, 0); requestAnimationFrame(drawDemos); }
+}
+window.addEventListener('hashchange', () => showView(location.hash.slice(1)));
+function openSettings(targetId) {
+  if (location.hash !== '#settings') history.pushState(null, '', '#settings');
+  showView('settings');
+  const target = $(targetId);
+  target.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  target.focus({ preventScroll: true });
+  target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash');
+}
+
+// Dashboard popups: a short summary of the clicked item, with a shortcut to its settings.
+const STATE_TEXT = { stale: 'No fresh data', clear: 'Outside alert range', approaching: 'Beeping', close: 'Full tone' };
+const CAMERA_TEXT = { demo: 'Not connected · illustrated view', connecting: 'Connecting', live: 'Connected', buffering: 'Buffering', error: 'Unavailable' };
+let quickState = null;
+function openQuick(kind, id) {
+  quickState = { kind, id }; $('quick').dataset.signature = '';
+  renderQuick();
+  if (!$('quick').open) $('quick').showModal();
+}
+function renderQuick() {
+  const { kind, id } = quickState, rows = [];
+  let eyebrow, heading, note, target, label, extra = null;
+  if (kind === 'sensor') {
+    const s = sensors[id], profile = L.alertProfile(Date.now() - s.updated < L.STALE_MS ? s.distance : NaN, s);
+    eyebrow = 'SENSOR'; heading = title(id);
+    rows.push(['Reading', profile.state === 'stale' ? 'No data' : formatDistance(s.distance)],
+      ['Alert', profile.state === 'approaching' ? 'Beeping · ' + Math.round(profile.progress * 100) + '%' : STATE_TEXT[profile.state]],
+      ['Max range', formatDistance(s.maxRange, 1)], ['Full tone at', formatDistance(s.fullTone, 1)],
+      ['Camera', CAMERA_TEXT[cameras[id].kind] || cameras[id].kind]);
+    note = sharedRanges ? 'All sides currently share the same distances.' : 'This side has its own distances.';
+    target = sharedRanges ? 'settings-proximity' : 'sensor-' + id; label = 'Adjust distances';
+    extra = { label: 'Camera setup ↗', run: () => openDevices(id) };
+  } else if (kind === 'map') {
+    eyebrow = 'PROXIMITY MAP'; heading = 'Alert distances';
+    ids.forEach(sid => rows.push([title(sid), `Beeps from ${formatDistance(sensors[sid].maxRange, 1)} · full tone at ${formatDistance(sensors[sid].fullTone, 1)}`]));
+    note = sharedRanges ? 'Same distances for all sides.' : 'Each side has its own distances.';
+    target = 'settings-proximity'; label = 'Adjust distances';
+  } else {
+    eyebrow = 'DRIVER WARNING LIGHT'; heading = 'Warning light';
+    rows.push(['Sensor / Pi', title($('lightSensor').value)],
+      ['Flashes within', formatDistance(lightThresholdMeters(), 1) + ($('lightManual').checked ? ' · set manually' : ' · synced to Full tone at')],
+      ['Light setting', $('lightEnabled').checked ? 'Enabled' : 'Disabled'], ['Status', $('lightStatus').textContent]);
+    note = mode === 'demo' ? 'Demo preview only. No hardware commands are sent.' : 'Changes reach the Pi only after Apply to Pi.';
+    target = 'settings-light'; label = 'Adjust warning light';
+  }
+  const signature = JSON.stringify([eyebrow, heading, note, label, rows]);
+  if ($('quick').dataset.signature === signature) return;
+  $('quick').dataset.signature = signature;
+  $('quickEyebrow').textContent = eyebrow; $('quickTitle').textContent = heading; $('quickNote').textContent = note;
+  $('quickDetails').replaceChildren(...rows.map(([name, value]) => {
+    const row = document.createElement('div'), dt = document.createElement('dt'), dd = document.createElement('dd');
+    dt.textContent = name; dd.textContent = value; row.append(dt, dd); return row;
+  }));
+  $('quickGo').textContent = label;
+  $('quickGo').onclick = () => { $('quick').close(); openSettings(target); };
+  $('quickExtra').hidden = !extra;
+  if (extra) { $('quickExtra').textContent = extra.label; $('quickExtra').onclick = extra.run; }
+}
+$('quick').addEventListener('click', event => {
+  // Close when the backdrop (outside the dialog box) is clicked.
+  const box = $('quick').getBoundingClientRect();
+  if (event.target === $('quick') && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom)) $('quick').close();
+});
+$('mapAdjust').onclick = () => openQuick('map');
+$('mapPanel').addEventListener('click', event => { if (!event.target.closest('button')) openQuick('map'); });
+$('lightAdjust').onclick = () => openQuick('light');
+$('lightCard').addEventListener('click', event => { if (!event.target.closest('button')) openQuick('light'); });
 function invalidateReadings() { ids.forEach(id => Object.assign(sensors[id], { updated: 0, distance: NaN, points: null, pose: null })); renderSensors(); }
 $('connectSensors').onclick = () => {
   let url;
@@ -287,5 +437,8 @@ $('disconnectSensors').onclick = () => {
 };
 window.addEventListener('beforeunload', () => { ids.forEach(id => cameras[id].stream?.getTracks().forEach(t => t.stop())); socket?.close(); closePiSources(); audio.close(); });
 window.addEventListener('resize', drawDemos);
-buildSensors(); buildSetup(); renderCameras(); syncDemoControl(); renderSensors(); log('Telehandler demo ready. Try each side and adjust the sound curve.'); setInterval(renderSensors, 100);
+buildSensors(); buildSetup(); addMapPreview('settingsMap'); addMapPreview('demoMap');
+['mapAdjust', 'lightAdjust'].forEach(id => $(id).innerHTML = GEAR_ICON);
+renderCameras(); setMode(mode); showView(location.hash.slice(1)); syncDemoControl(); renderSensors();
+log('Telehandler demo ready. Use the Demo tab to move obstacles.'); setInterval(renderSensors, 100);
 
