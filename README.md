@@ -4,8 +4,8 @@ A camera and distance dashboard for the EGR 101 telehandler prototype. Four posi
 
 The left rail has three tabs:
 
-- **Dashboard** — camera feeds, the proximity map, the warning light, and activity. Click a camera, map reading, the map, or the warning light (or its gear icon) for a short summary and a shortcut to its settings.
-- **Settings** — proximity distances, alert sound, and the warning light, with a live preview (map, sound, light, and a test obstacle) beside them.
+- **Dashboard** — camera feeds, the proximity map, the warning light, the driver buzz, and activity. Click a camera, map reading, the map, the warning light, or the driver buzz (or its gear icon) for a short summary and a shortcut to its settings.
+- **Settings** — proximity distances, alert sound, the warning light, and the driver buzz, with a live preview beside them.
 - **Demo** — simulated obstacles for each side, with the matching camera view and map.
 
 ## Run locally
@@ -67,7 +67,7 @@ Browser tests start their own temporary server on port 4318, use a simulated web
 
 ## Current scope
 
-This classroom prototype plays alerts in the browser. The supplied Picamera2/ultrasonic API and its HOG person detection are connected through the Pi bridge. Physical buzzer firmware, measured vehicle geometry, and actual sensor/boom calibration still depend on your hardware setup. The map is a 2D projection; the adapter must select relevant height slices before sending depth rays. This prototype is not a vehicle safety system, and browser audio/timers can pause in the background.
+This classroom prototype plays alerts in the browser and can pulse a Bluetooth XIAO-BUZZ motor on the same distance curve. The board has to be flashed with the XIAO-BUZZ firmware and advertising as `XIAO-BUZZ`. The supplied Picamera2/ultrasonic API and its HOG person detection are connected through the Pi bridge. Measured vehicle geometry and actual sensor/boom calibration still depend on your hardware setup. The map is a 2D projection; the adapter must select relevant height slices before sending depth rays. This prototype is not a vehicle safety system, and browser audio/timers can pause in the background.
 
 
 ## Driver warning light
@@ -75,3 +75,9 @@ This classroom prototype plays alerts in the browser. The supplied Picamera2/ult
 The dashboard shows the **Warning light** status; its sensor selector, adjustable distance in feet, enable/apply controls, and two-second test are under **Settings → Warning light**, next to the Pi-reported status. In demo mode it previews an amber indicator only. With the optional Pi LED configured, the Pi handles flashing locally even when the browser closes. See [LED wiring and setup](docs/pi-setup.md#driver-facing-amber-warning-led). Physical wiring and output still require testing on the actual Pi.
 
 Distance controls default to one shared Max range / Full tone at pair for all four sides. Turn off **Use the same distances for all sides** to adjust each side separately. The driver light follows its selected sensor’s Full tone at by default; **Set light distance manually** reveals its independent slider. Physical light changes still require **Apply to Pi**.
+
+## Driver buzz
+
+The dashboard **Driver buzz** card and **Settings → Driver buzz** pulse a XIAO-BUZZ motor: stronger and faster as the obstacle gets closer, matching the alert sound. On **This computer**, the page sends the most urgent sensor to `hardware/buzz_bridge.py`, including demo obstacles. On **Raspberry Pi**, choose the sensor, enable the buzz, and **Apply to Pi**. That Pi then pulses from its own ultrasonic reading even if the browser closes.
+
+Flash the Seeed XIAO ESP32-C3 with the `ble_buzz_pio` firmware so it advertises as `XIAO-BUZZ`. Only one host can hold the Bluetooth connection. Stop the local buzz bridge before starting the Pi with `--buzz`. See [Bluetooth buzz setup](docs/pi-setup.md#bluetooth-xiao-buzz).

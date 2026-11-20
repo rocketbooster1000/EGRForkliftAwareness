@@ -40,6 +40,11 @@
         <div class="light-readout"><span id="driverLight" class="driver-led" role="img" aria-label="Warning light off"></span><p id="lightStatus" role="status">Light disabled.</p></div>
         <p id="lightSummary" class="section-copy"></p>
       </section>
+      <section class="panel driver-buzz-card clickable" id="buzzCard" aria-labelledby="buzzTitle">
+        <div class="section-heading"><h3 id="buzzTitle">Driver buzz</h3><div class="heading-actions"><span id="buzzMode" class="badge subtle">THIS COMPUTER</span><button id="buzzAdjust" class="adjust-button" type="button" aria-label="Driver buzz settings"></button></div></div>
+        <div class="light-readout"><span id="buzzMark" class="buzz-mark" role="img" aria-label="Driver buzz off"></span><p id="buzzStatus" role="status">Buzz disabled.</p></div>
+        <p id="buzzSummary" class="section-copy"></p>
+      </section>
       <section class="panel activity"><div class="section-heading"><h3>Activity</h3><button id="clearLog" class="text-button">Clear</button></div><div id="log" aria-live="polite"></div></section>
     </aside>
   </div>
@@ -84,12 +89,27 @@
           <p id="lightMessage" class="section-copy" role="status">Demo preview only. No physical light connected.</p>
         </section>
       </div>
+      <section class="panel driver-buzz-panel" id="settings-buzz" tabindex="-1">
+          <div class="section-heading"><h3>Driver buzz</h3></div>
+          <p class="section-copy">A Bluetooth XIAO-BUZZ motor pulses as distance falls, on the same curve as the alert sound. This computer follows the most urgent sensor, including the demo. A Pi uses its own ultrasonic reading and keeps buzzing if this page closes. Connect the motor from only one host.</p>
+          <label for="buzzHost">Bluetooth host</label>
+          <select id="buzzHost"><option value="computer">This computer</option><option value="pi">Raspberry Pi</option></select>
+          <div id="buzzPiControls" hidden>
+            <label for="buzzSensor">Sensor / Pi</label>
+            <select id="buzzSensor"><option value="boom">Boom arm</option><option value="rear">Rear</option><option value="left">Left</option><option value="right">Right</option></select>
+            <div class="connection-row"><button id="applyBuzz" class="primary">Apply to Pi</button></div>
+          </div>
+          <label class="light-enable"><input id="buzzEnabled" type="checkbox"> Enable driver buzz</label>
+          <button id="testBuzz" class="full">Test buzz</button>
+          <p id="buzzMessage" class="section-copy" role="status">To buzz from this computer, run python hardware/buzz_bridge.py.</p>
+        </section>
     </div>
     <aside class="panel settings-preview" aria-labelledby="previewTitle">
       <div class="section-heading"><h3 id="previewTitle">Live preview</h3><span id="previewMode" class="badge subtle">DEMO</span></div>
       <div id="settingsMap" class="mini-map"></div>
       <div class="preview-row"><span class="preview-label">Sound</span><div id="audioSummary" class="audio-summary">Move an obstacle to explore the sound curve.</div></div>
       <div class="preview-row"><span class="preview-label">Warning light</span><div class="light-readout compact"><span id="driverLightPreview" class="driver-led" role="img" aria-label="Warning light off"></span><p id="lightStatusPreview">Light disabled.</p></div></div>
+      <div class="preview-row"><span class="preview-label">Driver buzz</span><div class="light-readout compact"><span id="buzzMarkPreview" class="buzz-mark" role="img" aria-label="Driver buzz off"></span><p id="buzzStatusPreview">Buzz disabled.</p></div></div>
       <div class="preview-test">
         <div class="section-heading"><h3>Test distance</h3><span class="quiet">DEMO ONLY</span></div>
         <label for="previewSensor" class="sr-only">Test sensor</label>
@@ -104,7 +124,7 @@
 
 <!-- Demo: simulated obstacles for practice without hardware. -->
 <div id="view-demo" class="view" hidden>
-  <div class="view-head"><h2>Demo</h2><p class="section-copy">Move simulated obstacles to see how the cameras, map, sound, and warning light respond.</p></div>
+  <div class="view-head"><h2>Demo</h2><p class="section-copy">Move simulated obstacles to see how the cameras, map, sound, warning light, and driver buzz respond.</p></div>
   <div class="demo-grid">
     <div class="demo-side">
       <section class="demo-panel" id="demoControls">
@@ -121,6 +141,7 @@
         <div class="section-heading"><h3>Response</h3></div>
         <div class="preview-row"><span class="preview-label">Sound</span><div id="audioSummaryDemo" class="audio-summary"></div></div>
         <div class="preview-row"><span class="preview-label">Warning light</span><div class="light-readout compact"><span id="driverLightDemo" class="driver-led" role="img" aria-label="Warning light off"></span><p id="lightStatusDemo">Light disabled.</p></div></div>
+        <div class="preview-row"><span class="preview-label">Driver buzz</span><div class="light-readout compact"><span id="buzzMarkDemo" class="buzz-mark" role="img" aria-label="Driver buzz off"></span><p id="buzzStatusDemo">Buzz disabled.</p></div></div>
       </section>
     </div>
     <section class="panel demo-camera-panel">
@@ -147,4 +168,4 @@
 
 <dialog id="devices"><form method="dialog" class="dialog-head"><div><div class="eyebrow">HARDWARE SETUP</div><h2>Connect your devices</h2></div><button aria-label="Close device setup">✕</button></form><p class="section-copy">Start with the boom-arm camera for the class prototype. Add the rear and side views as your setup grows.</p><section class="pi-setup"><h3>Your Raspberry Pi setup</h3><p class="section-copy">Connect your camera and ultrasonic API together. Start the Pi bridge, then enter its address and connection key.</p><label for="piUrl">Pi address</label><input id="piUrl" type="url" placeholder="http://raspberrypi.local:8080"><label for="piKey">Connection key</label><input id="piKey" type="password" autocomplete="off" spellcheck="false" placeholder="From hardware/bridge-token.txt on the Pi"><div class="connection-row"><button id="connectPi" class="primary">Connect Pi</button><button id="disconnectPi">Disconnect Pi devices</button></div><p id="piStatus" class="section-copy" role="status">No Pi connected.</p><p class="section-copy">The bridge assigns this pair to boom, rear, left, or right. Video includes person boxes and the sensor target; distance drives the existing beeps.</p></section><hr><div id="cameraSetup"></div><hr><h3>Other distance adapters</h3><p class="section-copy">Connect a depth-camera or distance-sensor adapter.</p><label for="sensorUrl">Sensor WebSocket URL</label><div class="connection-row"><input id="sensorUrl" type="url" placeholder="ws://localhost:8765"><button id="connectSensors" class="primary">Connect</button><button id="disconnectSensors">Use demo</button></div><p id="connectionStatus" role="status">Using simulated distance readings.</p><details><summary>Live measurements and the combined map</summary><p>Sensor IDs: boom, rear, left, right. Send each sensor at least once per second. Readings expire after 3 seconds.</p><pre>{"sensor":"rear","distance_m":1.25,
  "pose":{"x_m":0,"y_m":-2.2,"yaw_deg":180}}</pre><p>Poses are in meters from the vehicle origin: x = right, y = forward. Yaw rotates clockwise from forward. Supply calibrated mounting positions; update the boom pose as its arm moves. Without a pose, distance alerts work and the map labels the reading unplaced.</p><p>Send scan rays and multi-sensor frames to combine real data. See the repository sensor protocol guide for the full format.</p></details></dialog>
-<script src="logic.js"></script><script src="audio.js"></script><script src="app.js"></script><script src="pi.js"></script><script src="light.js"></script></body></html>
+<script src="logic.js"></script><script src="audio.js"></script><script src="app.js"></script><script src="pi.js"></script><script src="light.js"></script><script src="buzz.js"></script></body></html>

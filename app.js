@@ -370,13 +370,21 @@ function renderQuick() {
     ids.forEach(sid => rows.push([title(sid), `Beeps from ${formatDistance(sensors[sid].maxRange, 1)} · full tone at ${formatDistance(sensors[sid].fullTone, 1)}`]));
     note = sharedRanges ? 'Same distances for all sides.' : 'Each side has its own distances.';
     target = 'settings-proximity'; label = 'Adjust distances';
-  } else {
+  } else if (kind === 'light') {
     eyebrow = 'DRIVER WARNING LIGHT'; heading = 'Warning light';
     rows.push(['Sensor / Pi', title($('lightSensor').value)],
       ['Flashes within', formatDistance(lightThresholdMeters(), 1) + ($('lightManual').checked ? ' · set manually' : ' · synced to Full tone at')],
       ['Light setting', $('lightEnabled').checked ? 'Enabled' : 'Disabled'], ['Status', $('lightStatus').textContent]);
     note = mode === 'demo' ? 'Demo preview only. No hardware commands are sent.' : 'Changes reach the Pi only after Apply to Pi.';
     target = 'settings-light'; label = 'Adjust warning light';
+  } else {
+    eyebrow = 'DRIVER BUZZ'; heading = 'Driver buzz';
+    const sensor = $('buzzSensor').value;
+    rows.push(['Bluetooth host', $('buzzHost').value === 'pi' ? 'Raspberry Pi' : 'This computer'],
+      ['Follows', $('buzzHost').value === 'pi' ? title(sensor) + ' ultrasonic' : 'Most urgent sensor'],
+      ['Buzz setting', $('buzzEnabled').checked ? 'Enabled' : 'Disabled'], ['Status', $('buzzStatus').textContent]);
+    note = $('buzzHost').value === 'pi' ? (mode === 'demo' ? 'Demo preview only. No Pi commands are sent.' : 'Changes reach the Pi only after Apply to Pi.') : 'This computer sends the alert to the local buzz bridge.';
+    target = 'settings-buzz'; label = 'Adjust driver buzz';
   }
   const signature = JSON.stringify([eyebrow, heading, note, label, rows]);
   if ($('quick').dataset.signature === signature) return;
@@ -400,6 +408,8 @@ $('mapAdjust').onclick = () => openQuick('map');
 $('mapPanel').addEventListener('click', event => { if (!event.target.closest('button')) openQuick('map'); });
 $('lightAdjust').onclick = () => openQuick('light');
 $('lightCard').addEventListener('click', event => { if (!event.target.closest('button')) openQuick('light'); });
+$('buzzAdjust').onclick = () => openQuick('buzz');
+$('buzzCard').addEventListener('click', event => { if (!event.target.closest('button')) openQuick('buzz'); });
 function invalidateReadings() { ids.forEach(id => Object.assign(sensors[id], { updated: 0, distance: NaN, points: null, pose: null })); renderSensors(); }
 $('connectSensors').onclick = () => {
   let url;
@@ -438,7 +448,7 @@ $('disconnectSensors').onclick = () => {
 window.addEventListener('beforeunload', () => { ids.forEach(id => cameras[id].stream?.getTracks().forEach(t => t.stop())); socket?.close(); closePiSources(); audio.close(); });
 window.addEventListener('resize', drawDemos);
 buildSensors(); buildSetup(); addMapPreview('settingsMap'); addMapPreview('demoMap');
-['mapAdjust', 'lightAdjust'].forEach(id => $(id).innerHTML = GEAR_ICON);
+['mapAdjust', 'lightAdjust', 'buzzAdjust'].forEach(id => $(id).innerHTML = GEAR_ICON);
 renderCameras(); setMode(mode); showView(location.hash.slice(1)); syncDemoControl(); renderSensors();
 log('Telehandler demo ready. Use the Demo tab to move obstacles.'); setInterval(renderSensors, 100);
 

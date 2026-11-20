@@ -96,3 +96,37 @@ In **Settings → Warning light**, select the Pi's sensor, choose **Flash within
 The Pi compares its own fresh ultrasonic distance against the applied threshold and flashes at 2 Hz (250 ms on / 250 ms off). It clears 5 cm past the selected threshold to avoid flicker near the boundary. Stale, invalid, saturated/no-exact-distance, or failed capture data turns the warning off and reports unavailable, rather than implying the area is clear. The configured 4 m sensor maximum still applies even though the UI allows 15 ft. Keep thresholds within the sensor's useful calibrated range. The local controller continues if the browser disconnects; settings are memory-only and reset to disabled on restart. The dashboard reports the last Pi status, not optical confirmation that an LED is lit.
 
 Authenticated light routes: `GET /api/light`, `POST /api/light` with `{"enabled":true,"threshold_m":0.9144}`, and `POST /api/light/test` with `{}`. POST requires the bearer key, JSON, and an allowed browser origin (or the Pi's own origin). Query-string keys cannot control the light. The UI connection key stays in memory.
+
+## Bluetooth XIAO-BUZZ
+
+The motor is a Seeed XIAO ESP32-C3 with a DRV2605L, flashed from the `ble_buzz_pio` project so it advertises as `XIAO-BUZZ`. The host writes `b,<strength>,<duration_ms>` and waits for `ok,<strength>,<duration_ms>`. Strength is 0 to 1. Duration is 1 to 5000 ms. That client lives in `hardware/buzz_api.py`.
+
+Install the Bluetooth library on the computer that will own the motor:
+
+```sh
+python3 -m pip install -r hardware/requirements-buzz.txt
+```
+
+On Windows, `py -m pip` and `py` work when `python3` is not on PATH.
+
+### This computer
+
+From the repository root, with Bluetooth on and the board advertising:
+
+```sh
+python3 hardware/buzz_bridge.py
+```
+
+The bridge listens only on `127.0.0.1:8091`. In **Settings → Driver buzz**, leave the host on **This computer**, check **Enable driver buzz**, and move a demo obstacle. **Test buzz** sends one strong pulse. The bridge stops pulsing if the page stops sending readings. Quit the bridge with Ctrl+C before using the Pi as the host.
+
+### Raspberry Pi
+
+Add `--buzz` to the bridge command. The Pi needs Bluetooth and the `bleak` package above. The buzz starts disabled on every restart.
+
+```sh
+python3 hardware/pi_bridge.py --host 0.0.0.0 --sensor boom --buzz --allow-origin http://awarely.localhost:4317 --allow-origin http://localhost:4317 --allow-origin http://127.0.0.1:4317
+```
+
+In **Settings → Driver buzz**, choose **Raspberry Pi**, select that Pi's sensor, check **Enable driver buzz**, then **Apply to Pi**. The Pi compares its own fresh ultrasonic distance with the applied max range and full-tone distance. It clears 5 cm past max range. Stale, invalid, or failed readings stop the motor. **Test buzz** runs for two seconds. To turn it off, uncheck Enable and Apply. Closing the page does not stop a Pi-owned buzz.
+
+Authenticated Pi routes: `GET /api/buzz`, `POST /api/buzz` with `{"enabled":true,"max_range_m":3.048,"full_tone_m":0.6096}`, and `POST /api/buzz/test` with `{}`. POST requires the bearer key, JSON, and an allowed origin. The local bridge uses `POST /api/buzz/reading` with those fields plus `distance_m`, and it accepts only the dashboard origins on loopback.
