@@ -39,6 +39,20 @@
       continuous: progress >= 0.98
     };
   }
+  // Same curve the Bluetooth motor uses: stronger and faster as progress rises.
+  function hapticPulse(progress) {
+    if (!finite(progress)) return null;
+    progress = clamp(progress, 0, 1);
+    if (progress >= 0.98) return { strength: 0.85, durationMs: 400, periodSeconds: 0.48 };
+    const period = 0.12 + 1.08 * Math.pow(1 - progress, 1.65);
+    const duty = 0.1 + 0.85 * progress;
+    let durationMs = Math.round(period * duty * 1000);
+    const cap = Math.max(80, Math.round(period * 1000) - 40);
+    durationMs = clamp(durationMs, 80, Math.min(400, cap));
+    const strength = Math.round((0.35 + 0.65 * progress) * 100) / 100;
+    const periodSeconds = Math.round(Math.max(period, durationMs / 1000 + 0.04) * 10000) / 10000;
+    return { strength, durationMs, periodSeconds };
+  }
   function parseMeasurement(raw) {
     let data;
     try { data = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; }
@@ -100,7 +114,7 @@
     }
     return { points: [...cells.values()].map(c => ({ x_m: c.x_m / c.count, y_m: c.y_m / c.count, count: c.count, sources: [...c.sources], urgency: c.urgency })), unplaced, freshSensors };
   }
-  const api = { IDS, STALE_MS, METERS_PER_FOOT, MAX_RANGE_FT, feetToMeters, metersToFeet, AUDIO_MIN_HZ, AUDIO_MAX_HZ, DEMO_OBSTACLE, demoScan, DEMO_POSES, normalizeSettings, alertProfile, parseMeasurement, parseFrame, projectPoint, fuseReadings };
+  const api = { IDS, STALE_MS, METERS_PER_FOOT, MAX_RANGE_FT, feetToMeters, metersToFeet, AUDIO_MIN_HZ, AUDIO_MAX_HZ, DEMO_OBSTACLE, demoScan, DEMO_POSES, normalizeSettings, alertProfile, hapticPulse, parseMeasurement, parseFrame, projectPoint, fuseReadings };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.SurroundLogic = api;
 })(globalThis);

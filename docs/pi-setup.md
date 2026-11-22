@@ -96,3 +96,11 @@ In **Settings → Warning light**, select the Pi's sensor, choose **Flash within
 The Pi compares its own fresh ultrasonic distance against the applied threshold and flashes at 2 Hz (250 ms on / 250 ms off). It clears 5 cm past the selected threshold to avoid flicker near the boundary. Stale, invalid, saturated/no-exact-distance, or failed capture data turns the warning off and reports unavailable, rather than implying the area is clear. The configured 4 m sensor maximum still applies even though the UI allows 15 ft. Keep thresholds within the sensor's useful calibrated range. The local controller continues if the browser disconnects; settings are memory-only and reset to disabled on restart. The dashboard reports the last Pi status, not optical confirmation that an LED is lit.
 
 Authenticated light routes: `GET /api/light`, `POST /api/light` with `{"enabled":true,"threshold_m":0.9144}`, and `POST /api/light/test` with `{}`. POST requires the bearer key, JSON, and an allowed browser origin (or the Pi's own origin). Query-string keys cannot control the light. The UI connection key stays in memory.
+
+## Bluetooth XIAO-BUZZ
+
+The wristband is a Seeed XIAO ESP32-C3 with a DRV2605L, flashed from the `ble_buzz_pio` project so it advertises as `XIAO-BUZZ`. Each write is one pulse: `b,<strength>,<duration_ms>`. Strength is 0 to 1. Duration is 1 to 5000 ms. The board answers `ok,<strength>,<duration_ms>`.
+
+The browser showing the dashboard is the only device that connects to it. Open `http://localhost:4317` or `http://127.0.0.1:4317` in Chrome or Edge, then **Settings → Driver buzz → Connect wristband**. Check **Enable driver buzz**. The page writes a pulse when one is due and stays quiet outside max range. **Test buzz** sends one strong pulse. Closing the page drops the Bluetooth link.
+
+The Pi bridge does not accept `--buzz` and has no buzz route. It keeps sending the camera and the ultrasonic distance. The amber warning light is still applied on the Pi.

@@ -3,7 +3,9 @@ const $ = id => document.getElementById(id);
 const L = SurroundLogic, ids = L.IDS;
 const formatDistance = (meters, digits = 2) => L.metersToFeet(meters).toFixed(digits) + ' ft';
 const title = id => id === 'boom' ? 'Boom arm' : id.charAt(0).toUpperCase() + id.slice(1);
-const demoDistances = [3.2, 1.4, 2.8, 4.1];
+// All four start at 15 ft, past the default 10 ft max range. Sound and buzz stay
+// quiet until an obstacle moves inside the range set on the Settings page.
+const demoDistances = [15, 15, 15, 15].map(L.feetToMeters);
 const GEAR_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="8.4" stroke-width="3" stroke-dasharray="3.3 3.3"/><circle cx="12" cy="12" r="6.2" stroke-width="1.8"/><circle cx="12" cy="12" r="2.3" stroke-width="1.8"/></svg>';
 let stored = {};
 try { stored = JSON.parse(localStorage.getItem('surround-settings-v2') || localStorage.getItem('surround-settings') || '{}') || {}; } catch {}
@@ -317,7 +319,7 @@ function setMode(next) {
   $('modeBadge').textContent = demo ? '● DEMO MODE' : '● LIVE SENSOR MODE';
   ['obstacle', 'demoSensor', 'resetDemo', 'previewSensor', 'previewObstacle'].forEach(id => $(id).disabled = !demo);
   $('previewMode').textContent = demo ? 'DEMO' : 'LIVE';
-  $('previewModeNote').textContent = demo ? 'Move a simulated obstacle to hear and see your settings.' : 'Showing live readings. Test distance works in demo mode.';
+  $('previewModeNote').textContent = demo ? 'Alerts begin at max range. Sound and buzz follow the closest obstacle inside that range.' : 'Showing live readings. Test distance works in demo mode.';
   $('demoModeNote').hidden = demo;
   $('demoModeNote').textContent = demo ? '' : 'Live sensors are connected. Choose Use demo in Connect devices to return to simulation.';
   $('footerStatus').textContent = (demo ? '4 simulated sensors' : 'Live sensor input · stale after 3 seconds') + ' · settings saved on this browser';
@@ -370,13 +372,20 @@ function renderQuick() {
     ids.forEach(sid => rows.push([title(sid), `Beeps from ${formatDistance(sensors[sid].maxRange, 1)} · full tone at ${formatDistance(sensors[sid].fullTone, 1)}`]));
     note = sharedRanges ? 'Same distances for all sides.' : 'Each side has its own distances.';
     target = 'settings-proximity'; label = 'Adjust distances';
-  } else {
+  } else if (kind === 'light') {
     eyebrow = 'DRIVER WARNING LIGHT'; heading = 'Warning light';
     rows.push(['Sensor / Pi', title($('lightSensor').value)],
       ['Flashes within', formatDistance(lightThresholdMeters(), 1) + ($('lightManual').checked ? ' · set manually' : ' · synced to Full tone at')],
       ['Light setting', $('lightEnabled').checked ? 'Enabled' : 'Disabled'], ['Status', $('lightStatus').textContent]);
     note = mode === 'demo' ? 'Demo preview only. No hardware commands are sent.' : 'Changes reach the Pi only after Apply to Pi.';
     target = 'settings-light'; label = 'Adjust warning light';
+  } else {
+    eyebrow = 'DRIVER BUZZ'; heading = 'Driver buzz';
+    rows.push(['Link', buzzConnected() ? 'This browser' : 'Not connected'],
+      ['Follows', 'Most urgent sensor'],
+      ['Buzz setting', $('buzzEnabled').checked ? 'Enabled' : 'Disabled'], ['Status', $('buzzStatus').textContent]);
+    note = 'This browser writes a pulse only while an obstacle is inside max range.';
+    target = 'settings-buzz'; label = 'Adjust driver buzz';
   }
   const signature = JSON.stringify([eyebrow, heading, note, label, rows]);
   if ($('quick').dataset.signature === signature) return;
@@ -400,6 +409,8 @@ $('mapAdjust').onclick = () => openQuick('map');
 $('mapPanel').addEventListener('click', event => { if (!event.target.closest('button')) openQuick('map'); });
 $('lightAdjust').onclick = () => openQuick('light');
 $('lightCard').addEventListener('click', event => { if (!event.target.closest('button')) openQuick('light'); });
+$('buzzAdjust').onclick = () => openQuick('buzz');
+$('buzzCard').addEventListener('click', event => { if (!event.target.closest('button')) openQuick('buzz'); });
 function invalidateReadings() { ids.forEach(id => Object.assign(sensors[id], { updated: 0, distance: NaN, points: null, pose: null })); renderSensors(); }
 $('connectSensors').onclick = () => {
   let url;
@@ -438,7 +449,7 @@ $('disconnectSensors').onclick = () => {
 window.addEventListener('beforeunload', () => { ids.forEach(id => cameras[id].stream?.getTracks().forEach(t => t.stop())); socket?.close(); closePiSources(); audio.close(); });
 window.addEventListener('resize', drawDemos);
 buildSensors(); buildSetup(); addMapPreview('settingsMap'); addMapPreview('demoMap');
-['mapAdjust', 'lightAdjust'].forEach(id => $(id).innerHTML = GEAR_ICON);
+['mapAdjust', 'lightAdjust', 'buzzAdjust'].forEach(id => $(id).innerHTML = GEAR_ICON);
 renderCameras(); setMode(mode); showView(location.hash.slice(1)); syncDemoControl(); renderSensors();
 log('Telehandler demo ready. Use the Demo tab to move obstacles.'); setInterval(renderSensors, 100);
 

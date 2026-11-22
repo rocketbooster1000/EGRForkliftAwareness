@@ -16,6 +16,11 @@ test('sound increases continuously with decreasing distance and ends in sustaine
   assert.equal(L.alertProfile(3.001, settings).active, false);
   assert.equal(L.alertProfile(NaN, settings).state, 'stale');
   assert.equal(L.alertProfile(-1, settings).state, 'stale');
+  assert.deepEqual(L.hapticPulse(0), { strength: 0.35, durationMs: 120, periodSeconds: 1.2 });
+  assert.deepEqual(L.hapticPulse(1), { strength: 0.85, durationMs: 400, periodSeconds: 0.48 });
+  assert.equal(L.hapticPulse(NaN), null);
+  const mid = L.hapticPulse(0.5);
+  assert.ok(mid.strength > 0.35 && mid.periodSeconds < 1.2);
 });
 test('range settings cannot invert or create a zero width scale', () => {
   assert.deepEqual(L.normalizeSettings({ maxRange: 1, fullTone: 5 }), { maxRange: 1, fullTone: 1 - L.feetToMeters(0.1) });
@@ -64,6 +69,19 @@ test('demo scan preserves a fixed object width at every simulated distance', () 
     assert.ok(face.every(point => Math.abs(point.y_m - distance) < 1e-9));
     assert.ok(Math.abs(face[2].x_m - face[0].x_m - 0.8) < 1e-9);
   }
+});
+
+test('10 ft max range stays quiet at 15 ft and starts at the limit', () => {
+  const settings = L.normalizeSettings({ maxRange: L.feetToMeters(10), fullTone: L.feetToMeters(2) });
+  const beyond = L.alertProfile(L.feetToMeters(15), settings);
+  assert.equal(beyond.active, false);
+  assert.equal(beyond.state, 'clear');
+  const atLimit = L.alertProfile(L.feetToMeters(10), settings);
+  assert.equal(atLimit.active, true);
+  assert.equal(atLimit.progress, 0);
+  const inside = L.alertProfile(L.feetToMeters(9), settings);
+  assert.equal(inside.active, true);
+  assert.ok(inside.progress > 0);
 });
 
 test('15 foot limit uses actual unit conversion rather than relabeling meters', () => {

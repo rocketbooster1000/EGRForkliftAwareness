@@ -28,12 +28,12 @@ async function waitForServer() {
   assert.equal(await page.locator('#maxRange-boom').getAttribute('max'), '15');
   assert.equal(await page.locator('#obstacle').getAttribute('max'), '15');
   // The dashboard holds only cameras, map, warning light, and activity; settings and demo controls live on their own tabs.
-  for (const id of ['#cameraGrid', '#proximityMap', '#lightCard', '#log']) assert.equal(await page.locator(id).isVisible(), true, id);
-  for (const id of ['#fullTone-all', '#volume', '#lightSensor', '#applyLight', '#obstacle', '#demoSensor']) assert.equal(await page.locator(id).isVisible(), false, id);
+  for (const id of ['#cameraGrid', '#proximityMap', '#lightCard', '#buzzCard', '#log']) assert.equal(await page.locator(id).isVisible(), true, id);
+  for (const id of ['#fullTone-all', '#volume', '#lightSensor', '#applyLight', '#connectBuzz', '#obstacle', '#demoSensor']) assert.equal(await page.locator(id).isVisible(), false, id);
   assert.equal(await page.locator('.rail-link[data-view="dashboard"]').getAttribute('aria-current'), 'page');
   await tab('settings');
   assert.equal(page.url(), base + '/#settings');
-  for (const id of ['#fullTone-all', '#volume', '#lightSensor', '#applyLight', '#settingsMap svg']) assert.equal(await page.locator(id).isVisible(), true, id);
+  for (const id of ['#fullTone-all', '#volume', '#lightSensor', '#applyLight', '#connectBuzz', '#testBuzz', '#settingsMap svg']) assert.equal(await page.locator(id).isVisible(), true, id);
   assert.equal(await page.locator('#cameraGrid').isVisible(), false);
   await tab('demo');
   for (const id of ['#obstacle', '#demoSensor', '#resetDemo', '#demoView', '#demoMap svg']) assert.equal(await page.locator(id).isVisible(), true, id);
@@ -90,6 +90,11 @@ async function waitForServer() {
   assert.equal(await page.locator('#quickTitle').textContent(), 'Warning light');
   await page.locator('#quickGo').click();
   assert.equal(await page.evaluate(() => document.activeElement.id), 'settings-light');
+  await tab('dashboard');
+  await page.locator('#buzzAdjust').click();
+  assert.equal(await page.locator('#quickTitle').textContent(), 'Driver buzz');
+  await page.locator('#quickGo').click();
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'settings-buzz');
   await tab('dashboard');
   await page.locator('#proximityMap').click();
   assert.equal(await page.locator('#quickTitle').textContent(), 'Alert distances');

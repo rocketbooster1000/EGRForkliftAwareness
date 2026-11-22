@@ -20,7 +20,7 @@ from driver_light import DriverLight
 STALE_SECONDS = 3.0
 SENSOR_IDS = ("boom", "rear", "left", "right")
 STATIC_FILES = {"/": "index.html", **{f"/{name}": name for name in (
-    "index.html", "styles.css", "logic.js", "audio.js", "app.js", "pi.js", "light.js"
+    "index.html", "styles.css", "logic.js", "audio.js", "app.js", "pi.js", "light.js", "buzz.js"
 )}}
 CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8"}
 
@@ -249,11 +249,14 @@ def make_handler(state, site_root, token, allowed_origins=(), light=None):
                 self.send_json({"error": "Website origin is not allowed"}, 403)
                 return
             route = urlsplit(self.path).path
-            if route not in ("/api/light", "/api/light/test"):
+            routes = {"/api/light": light, "/api/light/test": light}
+            if route not in routes:
                 self.send_json({"error": "Not found"}, 404)
                 return
-            if light is None or not light.status()["available"]:
-                self.send_json({"error": "Start the Pi bridge with --light-pin to use the physical light"}, 409)
+            controller = routes[route]
+            if controller is None or not controller.status()["available"]:
+                message = "Start the Pi bridge with --light-pin to use the physical light"
+                self.send_json({"error": message}, 409)
                 return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -261,15 +264,16 @@ def make_handler(state, site_root, token, allowed_origins=(), light=None):
                     raise ValueError("Send a small JSON request")
                 self.connection.settimeout(3)
                 value = json.loads(self.rfile.read(length))
-                if route == "/api/light/test":
+                if route.endswith("/test"):
                     if value != {}:
                         raise ValueError("Test body must be an empty object")
-                    result = light.test()
+                    result = controller.test()
                 else:
-                    result = light.configure(value)
+                    result = controller.configure(value)
                 self.send_json(result)
             except (ValueError, TypeError, TimeoutError):
-                self.send_json({"error": "Invalid light settings: use enabled true/false and a distance of 0.1–15 ft"}, 400)
+                message = "Invalid light settings: use enabled true/false and a distance of 0.1–15 ft"
+                self.send_json({"error": message}, 400)
 
         def stream_video(self):
             if not state.snapshot().get("ready"):
