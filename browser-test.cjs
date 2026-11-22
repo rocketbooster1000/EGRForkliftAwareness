@@ -29,12 +29,11 @@ async function waitForServer() {
   assert.equal(await page.locator('#obstacle').getAttribute('max'), '15');
   // The dashboard holds only cameras, map, warning light, and activity; settings and demo controls live on their own tabs.
   for (const id of ['#cameraGrid', '#proximityMap', '#lightCard', '#buzzCard', '#log']) assert.equal(await page.locator(id).isVisible(), true, id);
-  for (const id of ['#fullTone-all', '#volume', '#lightSensor', '#applyLight', '#buzzHost', '#obstacle', '#demoSensor']) assert.equal(await page.locator(id).isVisible(), false, id);
+  for (const id of ['#fullTone-all', '#volume', '#lightSensor', '#applyLight', '#connectBuzz', '#obstacle', '#demoSensor']) assert.equal(await page.locator(id).isVisible(), false, id);
   assert.equal(await page.locator('.rail-link[data-view="dashboard"]').getAttribute('aria-current'), 'page');
   await tab('settings');
   assert.equal(page.url(), base + '/#settings');
-  for (const id of ['#fullTone-all', '#volume', '#lightSensor', '#applyLight', '#buzzHost', '#testBuzz', '#settingsMap svg']) assert.equal(await page.locator(id).isVisible(), true, id);
-  assert.equal(await page.locator('#buzzPiControls').isVisible(), false);
+  for (const id of ['#fullTone-all', '#volume', '#lightSensor', '#applyLight', '#connectBuzz', '#testBuzz', '#settingsMap svg']) assert.equal(await page.locator(id).isVisible(), true, id);
   assert.equal(await page.locator('#cameraGrid').isVisible(), false);
   await tab('demo');
   for (const id of ['#obstacle', '#demoSensor', '#resetDemo', '#demoView', '#demoMap svg']) assert.equal(await page.locator(id).isVisible(), true, id);

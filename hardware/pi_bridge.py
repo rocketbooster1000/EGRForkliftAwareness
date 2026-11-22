@@ -15,7 +15,6 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
-from driver_buzz import BleBuzzMotor, DriverBuzz
 from driver_light import DriverLight
 
 STALE_SECONDS = 3.0
@@ -160,7 +159,7 @@ class CaptureWorker(threading.Thread):
                     sensor.close()
 
 
-def make_handler(state, site_root, token, allowed_origins=(), light=None, buzz=None):
+def make_handler(state, site_root, token, allowed_origins=(), light=None):
     if not token:
         raise ValueError("A connection key is required")
 
@@ -211,15 +210,13 @@ def make_handler(state, site_root, token, allowed_origins=(), light=None, buzz=N
         def do_GET(self):
             route = urlsplit(self.path).path
             try:
-                if route in ("/api/reading", "/api/light", "/api/buzz", "/health", "/video.mjpg") and not self.authorized():
+                if route in ("/api/reading", "/api/light", "/health", "/video.mjpg") and not self.authorized():
                     self.send_json({"error": "A valid Pi connection key is required"}, 401)
                     return
                 if route == "/api/reading":
                     self.send_json(state.snapshot())
                 elif route == "/api/light":
                     self.send_json(light.status() if light else {"available": False, "reason": "not_configured"})
-                elif route == "/api/buzz":
-                    self.send_json(buzz.status() if buzz else {"available": False, "reason": "not_configured"})
                 elif route == "/health":
                     packet = state.snapshot()
                     healthy = packet.get("ready") and packet.get("age_ms", 3000) < 3000 and not packet.get("error")
@@ -252,13 +249,13 @@ def make_handler(state, site_root, token, allowed_origins=(), light=None, buzz=N
                 self.send_json({"error": "Website origin is not allowed"}, 403)
                 return
             route = urlsplit(self.path).path
-            routes = {"/api/light": light, "/api/light/test": light, "/api/buzz": buzz, "/api/buzz/test": buzz}
+            routes = {"/api/light": light, "/api/light/test": light}
             if route not in routes:
                 self.send_json({"error": "Not found"}, 404)
                 return
             controller = routes[route]
             if controller is None or not controller.status()["available"]:
-                message = "Start the Pi bridge with --buzz to use the Bluetooth motor" if route.startswith("/api/buzz") else "Start the Pi bridge with --light-pin to use the physical light"
+                message = "Start the Pi bridge with --light-pin to use the physical light"
                 self.send_json({"error": message}, 409)
                 return
             try:
@@ -275,7 +272,7 @@ def make_handler(state, site_root, token, allowed_origins=(), light=None, buzz=N
                     result = controller.configure(value)
                 self.send_json(result)
             except (ValueError, TypeError, TimeoutError):
-                message = "Invalid buzz settings: use enabled true/false and distances between 0.1 and 15 ft" if route.startswith("/api/buzz") else "Invalid light settings: use enabled true/false and a distance of 0.1–15 ft"
+                message = "Invalid light settings: use enabled true/false and a distance of 0.1–15 ft"
                 self.send_json({"error": message}, 400)
 
         def stream_video(self):
@@ -313,7 +310,6 @@ def parse_args(argv=None):
     parser.add_argument("--sensor", choices=SENSOR_IDS, default="boom")
     parser.add_argument("--trigger", type=int, default=17, help="BCM trigger pin")
     parser.add_argument("--light-pin", type=int, help="Optional BCM GPIO for a driver LED; disabled until enabled in the UI")
-    parser.add_argument("--buzz", action="store_true", help="Connect to a Bluetooth XIAO-BUZZ motor; disabled until enabled in the UI")
     parser.add_argument("--echo", type=int, default=18, help="BCM echo pin")
     parser.add_argument("--max-distance", type=float, default=4.0, help="Configured ultrasonic maximum in meters")
     parser.add_argument("--fps", type=float, default=10)
@@ -367,17 +363,8 @@ def main():
         from gpiozero import LED
         output = LED(args.light_pin, initial_value=False)
     light = DriverLight(state, output)
-    buzz_motor = None
-    if args.buzz:
-        try:
-            buzz_motor = BleBuzzMotor()
-            buzz_motor.start()
-        except ImportError as error:
-            raise SystemExit("Install bleak to use --buzz: python3 -m pip install -r hardware/requirements-buzz.txt") from error
-    buzz = DriverBuzz(state, buzz_motor)
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(state, Path(__file__).resolve().parent.parent, token, args.allow_origin, light, buzz))
+    server = ThreadingHTTPServer((args.host, args.port), make_handler(state, Path(__file__).resolve().parent.parent, token, args.allow_origin, light))
     light.start()
-    buzz.start()
     server.daemon_threads = True
     worker = CaptureWorker(state, args)
     worker.start()
@@ -391,9 +378,6 @@ def main():
         with state.condition:
             state.condition.notify_all()
         light.close()
-        buzz.close()
-        if buzz_motor is not None:
-            buzz_motor.close()
         server.server_close()
         worker.join(timeout=5)
 

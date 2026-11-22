@@ -81,6 +81,19 @@ class BuzzTests(unittest.TestCase):
         self.buzz.tick()
         self.assertTrue(self.buzz.active)
 
+    def test_dashboard_reading_holds_until_the_next_command(self):
+        state = InjectedState()
+        motor = Motor()
+        buzz = DriverBuzz(state, motor, lambda: self.now)
+        buzz.apply_reading({**self.reading(), "distance_m": 0.4})
+        sent = len(motor.pulses)
+        self.now += 10
+        buzz.tick()
+        self.assertGreater(len(motor.pulses), sent)
+        buzz.apply_reading({**self.reading(enabled=False), "distance_m": None})
+        buzz.tick()
+        self.assertEqual(buzz.reason, "disabled")
+
     def test_invalid_and_disconnected_motors_do_not_pulse(self):
         self.buzz.configure(self.reading())
         sent = len(self.motor.pulses)
@@ -136,7 +149,7 @@ class BuzzTests(unittest.TestCase):
         self.buzz.tick()
         self.assertEqual(self.buzz.reason, "disabled")
         token = "fixture-buzz-key"
-        server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(self.state, Path("."), token, ["http://localhost:4317"], None, self.buzz))
+        server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(self.state, Path("."), token, ["http://localhost:4317"]))
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
 
@@ -149,13 +162,9 @@ class BuzzTests(unittest.TestCase):
             return result
 
         try:
-            self.assertEqual(request("/api/buzz", None, {}, "GET")[0], 401)
+            self.assertEqual(request("/api/buzz", None, {}, "GET")[0], 404)
             auth = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
-            self.assertEqual(request("/api/buzz", self.reading(), {**auth, "Origin": "https://bad.example"})[0], 403)
-            code, data = request("/api/buzz", self.reading(), {**auth, "Origin": "http://localhost:4317"})
-            self.assertEqual(code, 200)
-            self.assertTrue(data["active"])
-            self.assertEqual(request("/api/buzz/test", {}, auth)[1]["reason"], "testing")
+            self.assertEqual(request("/api/buzz", self.reading(), {**auth, "Origin": "http://localhost:4317"})[0], 404)
         finally:
             server.shutdown()
             server.server_close()
@@ -188,7 +197,9 @@ class BuzzTests(unittest.TestCase):
             self.assertEqual(request("/api/buzz/reading", {"enabled": True}, "http://localhost:4317")[0], 400)
             state.updated -= 4
             buzz.tick()
-            self.assertEqual(buzz.reason, "sensor_unavailable")
+            self.assertEqual(buzz.reason, "close")
+            stopped = request("/api/buzz/reading", {**self.reading(enabled=False), "distance_m": None}, "http://localhost:4317")
+            self.assertEqual(stopped[1]["reason"], "disabled")
         finally:
             server.shutdown()
             server.server_close()

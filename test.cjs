@@ -71,6 +71,19 @@ test('demo scan preserves a fixed object width at every simulated distance', () 
   }
 });
 
+test('10 ft max range stays quiet at 15 ft and starts at the limit', () => {
+  const settings = L.normalizeSettings({ maxRange: L.feetToMeters(10), fullTone: L.feetToMeters(2) });
+  const beyond = L.alertProfile(L.feetToMeters(15), settings);
+  assert.equal(beyond.active, false);
+  assert.equal(beyond.state, 'clear');
+  const atLimit = L.alertProfile(L.feetToMeters(10), settings);
+  assert.equal(atLimit.active, true);
+  assert.equal(atLimit.progress, 0);
+  const inside = L.alertProfile(L.feetToMeters(9), settings);
+  assert.equal(inside.active, true);
+  assert.ok(inside.progress > 0);
+});
+
 test('15 foot limit uses actual unit conversion rather than relabeling meters', () => {
   assert.equal(L.feetToMeters(15), 4.572);
   assert.equal(L.metersToFeet(0.3048), 1);

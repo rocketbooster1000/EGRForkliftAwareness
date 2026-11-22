@@ -1,180 +1,123 @@
 'use strict';
-// XIAO-BUZZ follows the alert curve. This computer sends the winning distance to a
-// local bridge; a Pi uses its own ultrasonic reading after Apply.
-const BUZZ_BRIDGE = 'http://127.0.0.1:8091';
-let buzzBusy = false, buzzPollBusy = false, buzzPushBusy = false, buzzRevision = 0, buzzStopPending = false, demoBuzzTestUntil = 0;
-let buzzReported = null, buzzReportedAt = 0, buzzReportedBase = null;
-try {
-  const pref = JSON.parse(localStorage.getItem('surround-driver-buzz') || '{}');
-  if (pref.host === 'pi' || pref.host === 'computer') $('buzzHost').value = pref.host;
-  if (ids.includes(pref.sensor)) $('buzzSensor').value = pref.sensor;
-} catch {}
-function buzzComputer() { return $('buzzHost').value !== 'pi'; }
-function selectedBuzzBridge() {
-  if (mode === 'demo') return null;
-  return [...piSources.values()].find(bridge => !bridge.stopped && bridge.sensor === $('buzzSensor').value) || null;
-}
-function buzzTarget() {
-  if (buzzComputer()) return { base: BUZZ_BRIDGE, key: '', local: true };
-  const bridge = selectedBuzzBridge();
-  return bridge ? { base: bridge.base, key: bridge.key, local: false, sensor: bridge.sensor } : null;
-}
-function saveBuzzPrefs() {
-  try { localStorage.setItem('surround-driver-buzz', JSON.stringify({ host: $('buzzHost').value, sensor: $('buzzSensor').value })); } catch {}
-}
+// The wristband connects to this browser. One BLE write is one pulse, so the page
+// writes again only when the next pulse is due. Outside max range it writes nothing.
+const BUZZ_NAME = 'XIAO-BUZZ';
+const BUZZ_SERVICE = '7a3e0001-6c4b-4d2f-8e19-1f2a3b4c5d01';
+const BUZZ_CHAR = '7a3e0002-6c4b-4d2f-8e19-1f2a3b4c5d01';
+let buzzDevice = null, buzzChar = null, buzzWriting = false, buzzNextAt = 0, buzzTestUntil = 0, buzzLinkError = '';
 function freshSensor(id) {
   const sensor = sensors[id];
   if (!sensor || Date.now() - sensor.updated >= L.STALE_MS || !Number.isFinite(sensor.distance)) return null;
   return { id, distance: sensor.distance, maxRange: sensor.maxRange, fullTone: sensor.fullTone };
 }
-function urgentSensor() {
-  let active = null, nearest = null;
+function localBuzz() {
+  if (!$('buzzEnabled').checked) return { active: false, label: 'Buzz disabled' };
+  let winner = null, fresh = false;
   for (const id of ids) {
     const row = freshSensor(id);
     if (!row) continue;
+    fresh = true;
     const profile = L.alertProfile(row.distance, row);
-    row.progress = profile.progress;
-    row.active = profile.active;
-    if (profile.active && (!active || profile.progress > active.progress)) active = row;
-    if (!nearest || row.distance < nearest.distance) nearest = row;
+    if (profile.active && (!winner || profile.progress > winner.progress)) winner = { id, profile };
   }
-  return active || nearest;
+  if (!fresh) return { active: false, label: 'No fresh sensor reading · buzz off' };
+  if (!winner) return { active: false, label: 'Outside alert range' };
+  const pulse = L.hapticPulse(winner.profile.progress);
+  return { active: true, label: (winner.profile.continuous ? 'Strong buzz' : 'Pulsing · strength ' + pulse.strength.toFixed(2)) + ' · ' + title(winner.id), ...pulse };
 }
-function buzzReadingBody(enabled) {
-  const row = urgentSensor() || freshSensor('boom') || { distance: null, maxRange: sensors.boom.maxRange, fullTone: sensors.boom.fullTone };
-  return { enabled, distance_m: enabled ? (urgentSensor() ? urgentSensor().distance : null) : null, max_range_m: row.maxRange, full_tone_m: row.fullTone };
+function buzzPlan(now) {
+  if (now < buzzTestUntil) return { active: true, label: 'Testing buzz', strength: 0.85, durationMs: 400, periodSeconds: 0.9 };
+  return localBuzz();
 }
-function localBuzz() {
-  if (Date.now() < demoBuzzTestUntil) return { active: true, label: 'Testing buzz', strength: 0.85, durationMs: 400, periodSeconds: 0.9 };
-  if (!$('buzzEnabled').checked) return { active: false, label: 'Buzz disabled' };
-  const row = buzzComputer() ? urgentSensor() : freshSensor($('buzzSensor').value);
-  if (!row) return { active: false, label: 'No fresh sensor reading · buzz off' };
-  const profile = L.alertProfile(row.distance, row);
-  if (!profile.active) return { active: false, label: 'Outside alert range' };
-  const pulse = L.hapticPulse(profile.progress);
-  return { active: true, label: profile.continuous ? 'Strong buzz' : 'Pulsing · strength ' + pulse.strength.toFixed(2), ...pulse };
+function dueBuzzWrite(now) {
+  const plan = buzzPlan(now);
+  if (!buzzChar || buzzWriting || !plan.active || now < buzzNextAt) return null;
+  return plan;
 }
-function deviceBuzzText(data) {
-  if (!data.available) return 'No buzz configured on this Pi. Start with --buzz.';
-  if (!data.connected && data.reason !== 'disabled' && data.reason !== 'output_error') return 'XIAO-BUZZ not connected';
-  if (data.reason === 'disabled') return data.connected ? 'Buzz disabled · XIAO-BUZZ connected' : 'Buzz disabled' + (data.error ? ' · ' + data.error : ' · looking for XIAO-BUZZ');
-  const text = ({ approaching: 'Pulsing' + (Number.isFinite(data.strength) ? ' · strength ' + Number(data.strength).toFixed(2) : ''), close: 'Strong buzz', testing: 'Testing buzz', sensor_unavailable: 'No fresh sensor reading · buzz off', outside_range: 'Outside alert range', output_error: data.error || 'Buzz output error' })[data.reason] || 'Buzz status unknown';
-  return text + (data.reason === 'output_error' ? '' : ' · full at ' + formatDistance(data.full_tone_m, 1));
+function encodeBuzzCommand(strength, durationMs) {
+  return 'b,' + Number(strength).toFixed(2) + ',' + Math.round(durationMs);
 }
-async function buzzRequest(target, path, value) {
-  const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 2500);
-  try {
-    const headers = {};
-    if (target.key) headers.Authorization = 'Bearer ' + target.key;
-    if (value !== undefined) headers['Content-Type'] = 'application/json';
-    const response = await fetch(new URL(path, target.base), { method: value === undefined ? 'GET' : 'POST', headers, ...(value === undefined ? {} : { body: JSON.stringify(value) }), signal: controller.signal, cache: 'no-store', referrerPolicy: 'no-referrer' });
-    const data = await response.json();
-    if (!response.ok || data.error) throw new Error(data.error || 'Buzz request failed (' + response.status + ').');
-    if (typeof data.available !== 'boolean' || (data.available && (typeof data.enabled !== 'boolean' || typeof data.connected !== 'boolean' || typeof data.active !== 'boolean' || typeof data.reason !== 'string' || !Number.isFinite(data.max_range_m) || !Number.isFinite(data.full_tone_m)))) throw new Error('Buzz response is invalid.');
-    return data;
-  } finally { clearTimeout(timeout); }
+function buzzBytes(command) {
+  return typeof TextEncoder === 'undefined' ? command : new TextEncoder().encode(command);
 }
-function rememberBuzz(target, data) { buzzReported = data; buzzReportedAt = Date.now(); buzzReportedBase = target.base; }
-function buzzPrefsChanged() {
-  buzzRevision++;
-  demoBuzzTestUntil = 0;
-  saveBuzzPrefs();
-  if (buzzComputer()) {
-    if (!$('buzzEnabled').checked) buzzStopPending = true;
-    $('buzzMessage').textContent = $('buzzEnabled').checked ? 'Sending alerts to the buzz bridge on this computer.' : 'Driver buzz is off.';
-  } else $('buzzMessage').textContent = mode === 'demo' ? 'Demo preview only. No Pi commands are sent.' : 'Stop the buzz bridge on this computer, then choose Apply to Pi.';
+function buzzConnected() { return !!(buzzDevice && buzzDevice.gatt && buzzDevice.gatt.connected && buzzChar); }
+function useBuzzLink(characteristic) {
+  buzzChar = characteristic;
+  buzzDevice = characteristic ? { gatt: { connected: true, disconnect() {} } } : null;
+}
+function armBuzzWrite() { buzzNextAt = 0; }
+function onBuzzDisconnect() {
+  buzzChar = null;
+  buzzWriting = false;
+  buzzNextAt = 0;
   renderBuzz();
 }
-async function pushBuzzReading() {
-  if (buzzPushBusy) return;
-  const enabled = buzzComputer() && $('buzzEnabled').checked;
-  if (!enabled && !buzzStopPending) return;
-  buzzPushBusy = true;
-  const revision = buzzRevision;
-  try {
-    const data = await buzzRequest({ base: BUZZ_BRIDGE, key: '', local: true }, '/api/buzz/reading', buzzReadingBody(enabled));
-    if (!enabled) buzzStopPending = false;
-    if (buzzComputer() && revision === buzzRevision && !buzzBusy) rememberBuzz({ base: BUZZ_BRIDGE }, data);
-  } catch { if (buzzComputer() && revision === buzzRevision) buzzReportedAt = 0; }
-  finally { buzzPushBusy = false; renderBuzz(); }
-}
-async function changeBuzz(test) {
-  const computer = buzzComputer();
-  if (!computer && mode === 'demo') {
-    if (test) demoBuzzTestUntil = Date.now() + 2000;
-    renderBuzz(); return;
-  }
-  const target = computer ? { base: BUZZ_BRIDGE, key: '', local: true } : selectedBuzzBridge();
-  if (!target || buzzBusy) return;
-  buzzBusy = true;
-  const revision = ++buzzRevision;
+async function attachBuzz(device) {
+  buzzDevice = device;
+  device.addEventListener('gattserverdisconnected', onBuzzDisconnect);
+  const server = await device.gatt.connect();
+  const service = await server.getPrimaryService(BUZZ_SERVICE);
+  const characteristic = await service.getCharacteristic(BUZZ_CHAR);
+  try { await characteristic.startNotifications(); } catch {}
+  buzzChar = characteristic;
+  buzzLinkError = '';
+  buzzNextAt = 0;
+  $('buzzMessage').textContent = 'Wristband connected. Pulses are sent only while an obstacle is inside max range.';
   renderBuzz();
+}
+async function connectBuzz() {
+  const bluetooth = navigator.bluetooth;
+  if (!bluetooth) {
+    $('buzzMessage').textContent = 'This browser cannot open Bluetooth. Use Chrome or Edge at http://localhost:4317.';
+    return;
+  }
   try {
-    const sensor = $('buzzSensor').value;
-    const body = test ? {} : { enabled: $('buzzEnabled').checked, max_range_m: sensors[sensor].maxRange, full_tone_m: sensors[sensor].fullTone };
-    const data = await buzzRequest(target, test ? '/api/buzz/test' : (computer ? '/api/buzz/reading' : '/api/buzz'), test ? {} : body);
-    if ((computer ? !buzzComputer() : selectedBuzzBridge() !== target) || revision !== buzzRevision) return;
-    rememberBuzz(target, data);
-    $('buzzMessage').textContent = test ? 'Test sent to XIAO-BUZZ.' : 'Applied to ' + title(target.sensor) + ' Pi. Its local controller now handles the buzz.';
+    const device = await bluetooth.requestDevice({ filters: [{ name: BUZZ_NAME }], optionalServices: [BUZZ_SERVICE] });
+    $('buzzMessage').textContent = 'Connecting to ' + BUZZ_NAME + '…';
+    await attachBuzz(device);
   } catch (error) {
-    if (revision === buzzRevision) {
-      buzzReportedAt = 0;
-      const down = computer && (error.name === 'TypeError' || error.name === 'AbortError');
-      $('buzzMessage').textContent = (down ? 'Buzz bridge is not running. Start python hardware/buzz_bridge.py.' : (error.name === 'AbortError' ? 'Buzz host did not respond.' : error.message)) + (computer ? '' : ' State is unconfirmed; reconnect and check the motor.');
-    }
-  } finally { buzzBusy = false; renderBuzz(); }
+    buzzLinkError = error.name === 'NotFoundError' ? 'No wristband selected.' : error.message;
+    $('buzzMessage').textContent = buzzLinkError;
+    renderBuzz();
+  }
+}
+async function sendBuzzPulse(plan) {
+  const started = Date.now();
+  buzzWriting = true;
+  buzzNextAt = started + plan.periodSeconds * 1000;
+  try {
+    await buzzChar.writeValue(buzzBytes(encodeBuzzCommand(plan.strength, plan.durationMs)));
+  } catch (error) {
+    buzzNextAt = 0;
+    buzzLinkError = error.message || 'Wristband write failed.';
+    $('buzzMessage').textContent = buzzLinkError;
+    if (!buzzConnected()) onBuzzDisconnect();
+  } finally {
+    buzzWriting = false;
+  }
+}
+async function tickBuzz() {
+  const plan = dueBuzzWrite(Date.now());
+  if (plan) await sendBuzzPulse(plan);
 }
 function renderBuzz() {
-  const computer = buzzComputer(), bridge = selectedBuzzBridge(), local = localBuzz();
-  $('buzzPiControls').hidden = computer;
-  $('buzzMode').textContent = computer ? 'THIS COMPUTER' : (mode === 'demo' ? 'DEMO' : 'PI BLUETOOTH');
-  if ($('applyBuzz')) $('applyBuzz').disabled = computer || mode === 'demo' || !bridge || buzzBusy;
-  $('testBuzz').disabled = buzzBusy || (!computer && mode !== 'demo' && !bridge);
-  const target = buzzTarget();
-  const fresh = buzzReported && target && buzzReportedBase === target.base && Date.now() - buzzReportedAt < 3000;
-  let status, pulsing = false;
-  if (computer && !fresh) {
-    status = $('buzzEnabled').checked || Date.now() < demoBuzzTestUntil ? local.label + ' · buzz bridge is not running' : 'Buzz disabled.';
-    pulsing = ($('buzzEnabled').checked || Date.now() < demoBuzzTestUntil) && local.active && Date.now() % (local.periodSeconds * 1000) < local.durationMs;
-  } else if (!computer && mode === 'demo') {
-    status = 'DEMO · ' + local.label;
-    pulsing = local.active && Date.now() % (local.periodSeconds * 1000) < local.durationMs;
-  } else if (!target) status = 'No Pi connected for this sensor.';
-  else if (!fresh) status = 'Buzz status unavailable.';
-  else {
-    status = deviceBuzzText(buzzReported);
-    pulsing = buzzReported.active && buzzReported.connected && Number.isFinite(buzzReported.period_s) && Number.isFinite(buzzReported.duration_ms) && Date.now() % (buzzReported.period_s * 1000) < buzzReported.duration_ms;
-  }
+  const now = Date.now(), plan = buzzPlan(now), connected = buzzConnected();
+  $('buzzMode').textContent = connected ? 'WRISTBAND' : 'NOT CONNECTED';
+  $('connectBuzz').disabled = false;
+  $('testBuzz').disabled = !connected;
+  let status = plan.label;
+  if (!connected) status = $('buzzEnabled').checked || now < buzzTestUntil ? plan.label + ' · wristband not connected' : 'Buzz disabled.';
+  const pulsing = connected && plan.active && now % (plan.periodSeconds * 1000) < plan.durationMs;
   const label = pulsing ? 'Driver buzz pulsing' : 'Driver buzz off';
   ['buzzMark', 'buzzMarkPreview', 'buzzMarkDemo'].forEach(id => { $(id).classList.toggle('on', !!pulsing); $(id).setAttribute('aria-label', label); });
   ['buzzStatus', 'buzzStatusPreview', 'buzzStatusDemo'].forEach(id => { if ($(id).textContent !== status) $(id).textContent = status; });
-  const summary = computer ? 'Most urgent sensor · same curve as the alert sound' : title($('buzzSensor').value) + ' Pi · full buzz at ' + formatDistance(sensors[$('buzzSensor').value].fullTone, 1);
+  const summary = 'Most urgent sensor · this browser writes one pulse when it is due';
   if ($('buzzSummary').textContent !== summary) $('buzzSummary').textContent = summary;
 }
-async function pollBuzz() {
-  const target = buzzTarget();
-  if (!target || buzzBusy || buzzPollBusy || buzzPushBusy) return;
-  buzzPollBusy = true;
-  const revision = buzzRevision;
-  try {
-    const data = await buzzRequest(target, '/api/buzz');
-    if (buzzTarget()?.base === target.base && revision === buzzRevision && !buzzBusy) rememberBuzz(target, data);
-  } catch { if (buzzTarget()?.base === target.base && revision === buzzRevision) buzzReportedAt = 0; }
-  finally { buzzPollBusy = false; renderBuzz(); }
-}
-$('buzzHost').onchange = () => { if (!buzzComputer()) buzzStopPending = true; buzzPrefsChanged(); };
-$('buzzSensor').onchange = () => { buzzReportedAt = 0; buzzPrefsChanged(); pollBuzz(); };
-$('buzzEnabled').onchange = buzzPrefsChanged;
-$('applyBuzz').onclick = () => changeBuzz(false);
-$('testBuzz').onclick = () => changeBuzz(true);
-window.addEventListener('surround-distance-settings', () => {
-  if (!buzzComputer()) {
-    buzzRevision++;
-    $('buzzMessage').textContent = mode === 'demo' ? 'Demo preview only. No Pi commands are sent.' : 'Changes are not applied. Choose Apply to Pi.';
-  }
-  renderBuzz();
-});
+$('connectBuzz').onclick = () => connectBuzz();
+$('buzzEnabled').onchange = () => { buzzTestUntil = 0; buzzNextAt = 0; $('buzzMessage').textContent = $('buzzEnabled').checked ? (buzzConnected() ? 'Wristband connected. Pulses are sent only while an obstacle is inside max range.' : 'Connect the wristband, then bring an obstacle inside max range.') : 'Driver buzz is off.'; renderBuzz(); };
+$('testBuzz').onclick = () => { if (!buzzConnected()) { $('buzzMessage').textContent = 'Connect the wristband first.'; return; } buzzTestUntil = Date.now() + 900; buzzNextAt = 0; renderBuzz(); };
+window.addEventListener('pagehide', () => { if (buzzDevice && buzzDevice.gatt && buzzDevice.gatt.connected) buzzDevice.gatt.disconnect(); });
 renderBuzz();
 setInterval(renderBuzz, 100);
-setInterval(pollBuzz, 1000);
-setInterval(pushBuzzReading, 250);
+setInterval(() => { tickBuzz(); }, 50);

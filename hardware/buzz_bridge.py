@@ -6,8 +6,8 @@ Run this on the computer that should own the motor:
     python3 hardware/buzz_bridge.py
 
 Bluetooth has to be on, and the board has to be advertising as XIAO-BUZZ.
-Stop this process before starting the Pi bridge with --buzz. Only one host
-can hold the Bluetooth connection.
+The dashboard connects from the browser instead. Run this bridge only when
+that browser cannot use Web Bluetooth. Only one host can hold the link.
 """
 import argparse
 import json

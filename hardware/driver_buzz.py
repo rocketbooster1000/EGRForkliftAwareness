@@ -67,10 +67,11 @@ class InjectedState:
         with self.lock:
             if not self.ready:
                 return {"ready": False, "error": "Waiting for a dashboard reading"}
-            age = (time.monotonic() - self.updated) * 1000
+            # The dashboard sends a new distance only when the pulse changes, and a stop when it leaves.
+            # Hold the last command instead of expiring it. The Pi camera path still expires on its own.
             if self.distance is None:
-                return {"ready": True, "age_ms": age, "range_status": "invalid", "distance_m": None, "error": None}
-            return {"ready": True, "age_ms": age, "range_status": "valid", "distance_m": self.distance, "error": None}
+                return {"ready": True, "age_ms": 0, "range_status": "invalid", "distance_m": None, "error": None}
+            return {"ready": True, "age_ms": 0, "range_status": "valid", "distance_m": self.distance, "error": None}
 
 
 class DriverBuzz:

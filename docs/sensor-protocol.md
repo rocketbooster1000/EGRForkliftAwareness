@@ -2,7 +2,7 @@
 
 The interface displays feet and caps adjustable alert ranges at 15 ft. This protocol continues to accept meters; send real meter measurements without converting them to feet. Readings beyond the adjustable alert range remain valid for display and mapping.
 
-The dashboard receives JSON text over a user-selected WebSocket. Supported positions are `boom`, `rear`, `left`, and `right`; the earlier `front` ID is retired. This sensor socket carries no buzzer or vehicle commands. The XIAO-BUZZ motor uses the separate buzz bridge or the Pi `/api/buzz` route.
+The dashboard receives JSON text over a user-selected WebSocket. Supported positions are `boom`, `rear`, `left`, and `right`; the earlier `front` ID is retired. This sensor socket carries no buzzer or vehicle commands. The XIAO-BUZZ wristband is driven by the dashboard browser over Bluetooth. This sensor socket and the Pi bridge carry no buzzer commands.
 
 ## Single distance
 

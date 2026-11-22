@@ -3,7 +3,9 @@ const $ = id => document.getElementById(id);
 const L = SurroundLogic, ids = L.IDS;
 const formatDistance = (meters, digits = 2) => L.metersToFeet(meters).toFixed(digits) + ' ft';
 const title = id => id === 'boom' ? 'Boom arm' : id.charAt(0).toUpperCase() + id.slice(1);
-const demoDistances = [3.2, 1.4, 2.8, 4.1];
+// All four start at 15 ft, past the default 10 ft max range. Sound and buzz stay
+// quiet until an obstacle moves inside the range set on the Settings page.
+const demoDistances = [15, 15, 15, 15].map(L.feetToMeters);
 const GEAR_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="8.4" stroke-width="3" stroke-dasharray="3.3 3.3"/><circle cx="12" cy="12" r="6.2" stroke-width="1.8"/><circle cx="12" cy="12" r="2.3" stroke-width="1.8"/></svg>';
 let stored = {};
 try { stored = JSON.parse(localStorage.getItem('surround-settings-v2') || localStorage.getItem('surround-settings') || '{}') || {}; } catch {}
@@ -317,7 +319,7 @@ function setMode(next) {
   $('modeBadge').textContent = demo ? '● DEMO MODE' : '● LIVE SENSOR MODE';
   ['obstacle', 'demoSensor', 'resetDemo', 'previewSensor', 'previewObstacle'].forEach(id => $(id).disabled = !demo);
   $('previewMode').textContent = demo ? 'DEMO' : 'LIVE';
-  $('previewModeNote').textContent = demo ? 'Move a simulated obstacle to hear and see your settings.' : 'Showing live readings. Test distance works in demo mode.';
+  $('previewModeNote').textContent = demo ? 'Alerts begin at max range. Sound and buzz follow the closest obstacle inside that range.' : 'Showing live readings. Test distance works in demo mode.';
   $('demoModeNote').hidden = demo;
   $('demoModeNote').textContent = demo ? '' : 'Live sensors are connected. Choose Use demo in Connect devices to return to simulation.';
   $('footerStatus').textContent = (demo ? '4 simulated sensors' : 'Live sensor input · stale after 3 seconds') + ' · settings saved on this browser';
@@ -379,11 +381,10 @@ function renderQuick() {
     target = 'settings-light'; label = 'Adjust warning light';
   } else {
     eyebrow = 'DRIVER BUZZ'; heading = 'Driver buzz';
-    const sensor = $('buzzSensor').value;
-    rows.push(['Bluetooth host', $('buzzHost').value === 'pi' ? 'Raspberry Pi' : 'This computer'],
-      ['Follows', $('buzzHost').value === 'pi' ? title(sensor) + ' ultrasonic' : 'Most urgent sensor'],
+    rows.push(['Link', buzzConnected() ? 'This browser' : 'Not connected'],
+      ['Follows', 'Most urgent sensor'],
       ['Buzz setting', $('buzzEnabled').checked ? 'Enabled' : 'Disabled'], ['Status', $('buzzStatus').textContent]);
-    note = $('buzzHost').value === 'pi' ? (mode === 'demo' ? 'Demo preview only. No Pi commands are sent.' : 'Changes reach the Pi only after Apply to Pi.') : 'This computer sends the alert to the local buzz bridge.';
+    note = 'This browser writes a pulse only while an obstacle is inside max range.';
     target = 'settings-buzz'; label = 'Adjust driver buzz';
   }
   const signature = JSON.stringify([eyebrow, heading, note, label, rows]);

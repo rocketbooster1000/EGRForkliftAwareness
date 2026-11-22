@@ -78,6 +78,6 @@ Distance controls default to one shared Max range / Full tone at pair for all fo
 
 ## Driver buzz
 
-The dashboard **Driver buzz** card and **Settings → Driver buzz** pulse a XIAO-BUZZ motor: stronger and faster as the obstacle gets closer, matching the alert sound. On **This computer**, the page sends the most urgent sensor to `hardware/buzz_bridge.py`, including demo obstacles. On **Raspberry Pi**, choose the sensor, enable the buzz, and **Apply to Pi**. That Pi then pulses from its own ultrasonic reading even if the browser closes.
+The dashboard **Driver buzz** card and **Settings → Driver buzz** pulse a XIAO-BUZZ wristband: stronger and faster as the obstacle gets closer, matching the alert sound. The browser that is showing the dashboard holds the Bluetooth connection. It writes one pulse when that pulse is due, including for demo obstacles, and writes nothing while every obstacle is outside max range. The Pi sends distance and video only.
 
-Flash the Seeed XIAO ESP32-C3 with the `ble_buzz_pio` firmware so it advertises as `XIAO-BUZZ`. Only one host can hold the Bluetooth connection. Stop the local buzz bridge before starting the Pi with `--buzz`. See [Bluetooth buzz setup](docs/pi-setup.md#bluetooth-xiao-buzz).
+Flash the Seeed XIAO ESP32-C3 with the `ble_buzz_pio` firmware so it advertises as `XIAO-BUZZ`. Open the site in Chrome or Edge at `http://localhost:4317`, choose **Connect wristband**, then **Enable driver buzz**. See [Bluetooth buzz setup](docs/pi-setup.md#bluetooth-xiao-buzz).

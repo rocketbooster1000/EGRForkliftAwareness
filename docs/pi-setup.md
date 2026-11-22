@@ -99,34 +99,8 @@ Authenticated light routes: `GET /api/light`, `POST /api/light` with `{"enabled"
 
 ## Bluetooth XIAO-BUZZ
 
-The motor is a Seeed XIAO ESP32-C3 with a DRV2605L, flashed from the `ble_buzz_pio` project so it advertises as `XIAO-BUZZ`. The host writes `b,<strength>,<duration_ms>` and waits for `ok,<strength>,<duration_ms>`. Strength is 0 to 1. Duration is 1 to 5000 ms. That client lives in `hardware/buzz_api.py`.
+The wristband is a Seeed XIAO ESP32-C3 with a DRV2605L, flashed from the `ble_buzz_pio` project so it advertises as `XIAO-BUZZ`. Each write is one pulse: `b,<strength>,<duration_ms>`. Strength is 0 to 1. Duration is 1 to 5000 ms. The board answers `ok,<strength>,<duration_ms>`.
 
-Install the Bluetooth library on the computer that will own the motor:
+The browser showing the dashboard is the only device that connects to it. Open `http://localhost:4317` or `http://127.0.0.1:4317` in Chrome or Edge, then **Settings → Driver buzz → Connect wristband**. Check **Enable driver buzz**. The page writes a pulse when one is due and stays quiet outside max range. **Test buzz** sends one strong pulse. Closing the page drops the Bluetooth link.
 
-```sh
-python3 -m pip install -r hardware/requirements-buzz.txt
-```
-
-On Windows, `py -m pip` and `py` work when `python3` is not on PATH.
-
-### This computer
-
-From the repository root, with Bluetooth on and the board advertising:
-
-```sh
-python3 hardware/buzz_bridge.py
-```
-
-The bridge listens only on `127.0.0.1:8091`. In **Settings → Driver buzz**, leave the host on **This computer**, check **Enable driver buzz**, and move a demo obstacle. **Test buzz** sends one strong pulse. The bridge stops pulsing if the page stops sending readings. Quit the bridge with Ctrl+C before using the Pi as the host.
-
-### Raspberry Pi
-
-Add `--buzz` to the bridge command. The Pi needs Bluetooth and the `bleak` package above. The buzz starts disabled on every restart.
-
-```sh
-python3 hardware/pi_bridge.py --host 0.0.0.0 --sensor boom --buzz --allow-origin http://awarely.localhost:4317 --allow-origin http://localhost:4317 --allow-origin http://127.0.0.1:4317
-```
-
-In **Settings → Driver buzz**, choose **Raspberry Pi**, select that Pi's sensor, check **Enable driver buzz**, then **Apply to Pi**. The Pi compares its own fresh ultrasonic distance with the applied max range and full-tone distance. It clears 5 cm past max range. Stale, invalid, or failed readings stop the motor. **Test buzz** runs for two seconds. To turn it off, uncheck Enable and Apply. Closing the page does not stop a Pi-owned buzz.
-
-Authenticated Pi routes: `GET /api/buzz`, `POST /api/buzz` with `{"enabled":true,"max_range_m":3.048,"full_tone_m":0.6096}`, and `POST /api/buzz/test` with `{}`. POST requires the bearer key, JSON, and an allowed origin. The local bridge uses `POST /api/buzz/reading` with those fields plus `distance_m`, and it accepts only the dashboard origins on loopback.
+The Pi bridge does not accept `--buzz` and has no buzz route. It keeps sending the camera and the ultrasonic distance. The amber warning light is still applied on the Pi.

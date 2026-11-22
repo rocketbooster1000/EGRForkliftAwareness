@@ -41,7 +41,7 @@
         <p id="lightSummary" class="section-copy"></p>
       </section>
       <section class="panel driver-buzz-card clickable" id="buzzCard" aria-labelledby="buzzTitle">
-        <div class="section-heading"><h3 id="buzzTitle">Driver buzz</h3><div class="heading-actions"><span id="buzzMode" class="badge subtle">THIS COMPUTER</span><button id="buzzAdjust" class="adjust-button" type="button" aria-label="Driver buzz settings"></button></div></div>
+        <div class="section-heading"><h3 id="buzzTitle">Driver buzz</h3><div class="heading-actions"><span id="buzzMode" class="badge subtle">NOT CONNECTED</span><button id="buzzAdjust" class="adjust-button" type="button" aria-label="Driver buzz settings"></button></div></div>
         <div class="light-readout"><span id="buzzMark" class="buzz-mark" role="img" aria-label="Driver buzz off"></span><p id="buzzStatus" role="status">Buzz disabled.</p></div>
         <p id="buzzSummary" class="section-copy"></p>
       </section>
@@ -91,17 +91,11 @@
       </div>
       <section class="panel driver-buzz-panel" id="settings-buzz" tabindex="-1">
           <div class="section-heading"><h3>Driver buzz</h3></div>
-          <p class="section-copy">A Bluetooth XIAO-BUZZ motor pulses as distance falls, on the same curve as the alert sound. This computer follows the most urgent sensor, including the demo. A Pi uses its own ultrasonic reading and keeps buzzing if this page closes. Connect the motor from only one host.</p>
-          <label for="buzzHost">Bluetooth host</label>
-          <select id="buzzHost"><option value="computer">This computer</option><option value="pi">Raspberry Pi</option></select>
-          <div id="buzzPiControls" hidden>
-            <label for="buzzSensor">Sensor / Pi</label>
-            <select id="buzzSensor"><option value="boom">Boom arm</option><option value="rear">Rear</option><option value="left">Left</option><option value="right">Right</option></select>
-            <div class="connection-row"><button id="applyBuzz" class="primary">Apply to Pi</button></div>
-          </div>
+          <p class="section-copy">The wristband connects to this browser over Bluetooth. The closest obstacle inside max range sets the pulse. The Pi sends distance and video only, and does not connect to the motor.</p>
+          <button id="connectBuzz" class="full">Connect wristband</button>
           <label class="light-enable"><input id="buzzEnabled" type="checkbox"> Enable driver buzz</label>
           <button id="testBuzz" class="full">Test buzz</button>
-          <p id="buzzMessage" class="section-copy" role="status">To buzz from this computer, run python hardware/buzz_bridge.py.</p>
+          <p id="buzzMessage" class="section-copy" role="status">Use Chrome or Edge at localhost, then connect the XIAO-BUZZ wristband.</p>
         </section>
     </div>
     <aside class="panel settings-preview" aria-labelledby="previewTitle">
@@ -114,9 +108,9 @@
         <div class="section-heading"><h3>Test distance</h3><span class="quiet">DEMO ONLY</span></div>
         <label for="previewSensor" class="sr-only">Test sensor</label>
         <select id="previewSensor"><option value="rear">Rear</option><option value="boom">Boom arm</option><option value="left">Left</option><option value="right">Right</option></select>
-        <label class="range-label" for="previewObstacle">Obstacle distance <output id="previewObstacleValue">4.59 ft</output></label>
-        <input id="previewObstacle" type="range" min="0.1" max="15" step="0.1" value="4.6">
-        <p id="previewModeNote" class="section-copy">Move a simulated obstacle to hear and see your settings.</p>
+        <label class="range-label" for="previewObstacle">Obstacle distance <output id="previewObstacleValue">15.00 ft</output></label>
+        <input id="previewObstacle" type="range" min="0.1" max="15" step="0.1" value="15">
+        <p id="previewModeNote" class="section-copy">Alerts begin at max range. Sound and buzz follow the closest obstacle inside that range.</p>
       </div>
     </aside>
   </div>
@@ -132,8 +126,8 @@
         <p>Choose any side and move its simulated obstacle.</p>
         <label for="demoSensor">Sensor</label>
         <select id="demoSensor"><option value="rear">Rear</option><option value="boom">Boom arm</option><option value="left">Left</option><option value="right">Right</option></select>
-        <label for="obstacle">Obstacle distance <output id="obstacleValue">4.59 ft</output></label>
-        <input id="obstacle" type="range" min="0.1" max="15" step="0.1" value="4.6">
+        <label for="obstacle">Obstacle distance <output id="obstacleValue">15.00 ft</output></label>
+        <input id="obstacle" type="range" min="0.1" max="15" step="0.1" value="15">
         <button id="resetDemo" class="text-button">Reset demo</button>
         <p id="demoModeNote" class="section-copy"></p>
       </section>
